@@ -1,6 +1,12 @@
 import type { LucideIcon } from "lucide-react";
 
-export type ModuleKey = "overview" | "homestays" | "customers" | "bookings" | "accounts";
+export type ModuleKey =
+  | "overview"
+  | "homestays"
+  | "customers"
+  | "bookings"
+  | "calendar"
+  | "accounts";
 
 export type HomestayStatus = "active" | "maintenance" | "paused";
 

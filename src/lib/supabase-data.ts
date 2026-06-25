@@ -76,6 +76,11 @@ export type CreateBookingInput = {
   channel: string;
 };
 
+export type UpdateBookingInput = CreateBookingInput & {
+  id: string;
+  status: BookingStatus;
+};
+
 export type CreateHomestayInput = {
   ownerId: string;
   name: string;
@@ -86,6 +91,16 @@ export type CreateHomestayInput = {
   roomName: string;
 };
 
+export type UpdateHomestayInput = {
+  id: string;
+  name: string;
+  location: string;
+  managerName: string;
+  units: number;
+  nightlyRate: number;
+  status: HomestayStatus;
+};
+
 export type CreateCustomerInput = {
   ownerId: string;
   fullName: string;
@@ -93,6 +108,10 @@ export type CreateCustomerInput = {
   email: string;
   city: string;
   preferences: string;
+};
+
+export type UpdateCustomerInput = Omit<CreateCustomerInput, "ownerId"> & {
+  id: string;
 };
 
 export type CreateAccountEntryInput = {
@@ -184,6 +203,36 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking>
   return mapBooking(data as BookingRow, []);
 }
 
+export async function updateBooking(input: UpdateBookingInput): Promise<Booking> {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  const { data, error } = await supabase
+    .from("bookings")
+    .update({
+      homestay_id: input.homestayId,
+      room_id: input.roomId,
+      customer_id: input.customerId,
+      check_in: input.checkIn,
+      check_out: input.checkOut,
+      guest_count: input.guests,
+      status: input.status,
+      channel: input.channel,
+      total_amount: input.amount,
+      amount_paid: input.paid,
+    })
+    .eq("id", input.id)
+    .select("id,homestay_id,room_id,customer_id,check_in,check_out,guest_count,status,channel,total_amount,amount_paid")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return mapBooking(data as BookingRow, []);
+}
+
 export async function createHomestay(input: CreateHomestayInput): Promise<void> {
   if (!supabase) {
     throw new Error("Supabase environment variables are not configured.");
@@ -224,6 +273,32 @@ export async function createHomestay(input: CreateHomestayInput): Promise<void> 
   }
 }
 
+export async function updateHomestay(input: UpdateHomestayInput): Promise<Homestay> {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  const { data, error } = await supabase
+    .from("homestays")
+    .update({
+      name: input.name,
+      location: input.location,
+      manager_name: input.managerName || null,
+      units: input.units,
+      nightly_rate: input.nightlyRate,
+      status: input.status,
+    })
+    .eq("id", input.id)
+    .select("id,name,location,manager_name,units,nightly_rate,status")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return mapHomestay(data as HomestayRow);
+}
+
 export async function createCustomer(input: CreateCustomerInput): Promise<string> {
   if (!supabase) {
     throw new Error("Supabase environment variables are not configured.");
@@ -247,6 +322,31 @@ export async function createCustomer(input: CreateCustomerInput): Promise<string
   }
 
   return (data as { id: string }).id;
+}
+
+export async function updateCustomer(input: UpdateCustomerInput): Promise<Customer> {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  const { data, error } = await supabase
+    .from("customers")
+    .update({
+      full_name: input.fullName,
+      phone: input.phone,
+      email: input.email || null,
+      city: input.city || null,
+      preferences: input.preferences || null,
+    })
+    .eq("id", input.id)
+    .select("id,full_name,phone,email,city,preferences")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return mapCustomer(data as CustomerRow, []);
 }
 
 export async function createAccountEntry(input: CreateAccountEntryInput): Promise<void> {

@@ -7,6 +7,7 @@ import {
   BedDouble,
   Bell,
   Building2,
+  CalendarDays,
   CalendarCheck,
   CheckCircle2,
   ChevronDown,
@@ -16,6 +17,7 @@ import {
   LogOut,
   MapPin,
   Menu,
+  Pencil,
   Plus,
   ReceiptText,
   Search,
@@ -33,6 +35,9 @@ import {
   createCustomer,
   createHomestay,
   fetchDashboardData,
+  updateBooking,
+  updateCustomer,
+  updateHomestay,
 } from "@/lib/supabase-data";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import type {
@@ -60,6 +65,12 @@ const navItems: NavItem[] = [
     label: "Bookings",
     href: "/bookings",
     icon: CalendarCheck,
+  },
+  {
+    key: "calendar",
+    label: "Calendar",
+    href: "/calendar",
+    icon: CalendarDays,
   },
   { key: "accounts", label: "Accounts", href: "/accounts", icon: WalletCards },
 ];
@@ -103,6 +114,11 @@ type BookingForm = {
   channel: Booking["channel"];
 };
 
+type BookingEditForm = BookingForm & {
+  bookingId: string;
+  status: BookingStatus;
+};
+
 type HomestayForm = {
   name: string;
   location: string;
@@ -112,12 +128,21 @@ type HomestayForm = {
   roomName: string;
 };
 
+type HomestayEditForm = Omit<HomestayForm, "roomName"> & {
+  homestayId: string;
+  status: Homestay["status"];
+};
+
 type CustomerForm = {
   fullName: string;
   phone: string;
   email: string;
   city: string;
   preferences: string;
+};
+
+type CustomerEditForm = CustomerForm & {
+  customerId: string;
 };
 
 type BookingEntryForm = {
@@ -160,6 +185,7 @@ export function ResortDashboard({
   const [query, setQuery] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [calendarMonth, setCalendarMonth] = useState(todayMonth());
   const [data, setData] = useState<DashboardData>(emptyDashboardData);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -171,15 +197,24 @@ export function ResortDashboard({
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [showQuickBookingModal, setShowQuickBookingModal] = useState(false);
   const [showBookingEntryModal, setShowBookingEntryModal] = useState(false);
+  const [showEditBookingModal, setShowEditBookingModal] = useState(false);
+  const [showEditHomestayModal, setShowEditHomestayModal] = useState(false);
+  const [showEditCustomerModal, setShowEditCustomerModal] = useState(false);
   const [showHomestayForm, setShowHomestayForm] = useState(false);
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [showQuickCustomerModal, setShowQuickCustomerModal] = useState(false);
   const [homestaySaveError, setHomestaySaveError] = useState("");
   const [customerSaveError, setCustomerSaveError] = useState("");
   const [bookingEntrySaveError, setBookingEntrySaveError] = useState("");
+  const [editBookingSaveError, setEditBookingSaveError] = useState("");
+  const [editHomestaySaveError, setEditHomestaySaveError] = useState("");
+  const [editCustomerSaveError, setEditCustomerSaveError] = useState("");
   const [isHomestaySaving, setIsHomestaySaving] = useState(false);
   const [isCustomerSaving, setIsCustomerSaving] = useState(false);
   const [isBookingEntrySaving, setIsBookingEntrySaving] = useState(false);
+  const [isBookingUpdating, setIsBookingUpdating] = useState(false);
+  const [isHomestayUpdating, setIsHomestayUpdating] = useState(false);
+  const [isCustomerUpdating, setIsCustomerUpdating] = useState(false);
   const [homestayForm, setHomestayForm] = useState<HomestayForm>({
     name: "",
     location: "",
@@ -188,7 +223,25 @@ export function ResortDashboard({
     nightlyRate: 0,
     roomName: "",
   });
+  const [homestayEditForm, setHomestayEditForm] =
+    useState<HomestayEditForm>({
+      homestayId: "",
+      name: "",
+      location: "",
+      managerName: "",
+      units: 1,
+      nightlyRate: 0,
+      status: "active",
+    });
   const [customerForm, setCustomerForm] = useState<CustomerForm>({
+    fullName: "",
+    phone: "",
+    email: "",
+    city: "",
+    preferences: "",
+  });
+  const [customerEditForm, setCustomerEditForm] = useState<CustomerEditForm>({
+    customerId: "",
     fullName: "",
     phone: "",
     email: "",
@@ -205,6 +258,19 @@ export function ResortDashboard({
     amount: 0,
     paid: 0,
     channel: "Direct",
+  });
+  const [bookingEditForm, setBookingEditForm] = useState<BookingEditForm>({
+    bookingId: "",
+    customerId: "",
+    homestayId: "",
+    roomId: "",
+    checkIn: todayIso(),
+    checkOut: addDaysIso(new Date(), 1),
+    guests: 1,
+    amount: 0,
+    paid: 0,
+    channel: "Direct",
+    status: "pending",
   });
   const [bookingEntryForm, setBookingEntryForm] = useState<BookingEntryForm>({
     bookingId: "",
@@ -336,6 +402,12 @@ export function ResortDashboard({
     return rooms.filter((room) => room.homestayId === bookingForm.homestayId);
   }, [bookingForm.homestayId, rooms]);
 
+  const editFormRooms = useMemo(() => {
+    return rooms.filter(
+      (room) => room.homestayId === bookingEditForm.homestayId,
+    );
+  }, [bookingEditForm.homestayId, rooms]);
+
   const metrics = useMemo(() => {
     const bookedRevenue = visibleBookings.reduce(
       (total, booking) => total + booking.amount,
@@ -383,6 +455,8 @@ export function ResortDashboard({
       occupancy: totalUnits > 0 ? Math.round((occupied / totalUnits) * 100) : 0,
     };
   }, [accountEntries, homestays, selectedHomestayId, visibleBookings]);
+  const showDashboardSummary =
+    activeModule === "overview" || activeModule === "accounts";
 
   async function addBooking(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -427,6 +501,56 @@ export function ResortDashboard({
       );
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function saveBookingEdits(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (
+      !bookingEditForm.bookingId ||
+      !bookingEditForm.customerId ||
+      !bookingEditForm.homestayId
+    ) {
+      setEditBookingSaveError("Select a booking, customer, and homestay.");
+      return;
+    }
+
+    setIsBookingUpdating(true);
+    setEditBookingSaveError("");
+
+    try {
+      await updateBooking({
+        id: bookingEditForm.bookingId,
+        homestayId: bookingEditForm.homestayId,
+        roomId: bookingEditForm.roomId || null,
+        customerId: bookingEditForm.customerId,
+        checkIn: bookingEditForm.checkIn,
+        checkOut: bookingEditForm.checkOut,
+        guests: bookingEditForm.guests,
+        amount: bookingEditForm.amount,
+        paid: bookingEditForm.paid,
+        channel: bookingEditForm.channel,
+        status: bookingEditForm.status,
+      });
+
+      const refreshedData = await fetchDashboardData();
+
+      setData(refreshedData);
+      setBookingForm((current) =>
+        ensureBookingFormDefaults(current, refreshedData),
+      );
+      setBookingEntryForm((current) =>
+        ensureBookingEntryFormDefaults(current, refreshedData),
+      );
+      setShowEditBookingModal(false);
+      setActiveModule("bookings");
+    } catch (error) {
+      setEditBookingSaveError(
+        error instanceof Error ? error.message : "Unable to update booking.",
+      );
+    } finally {
+      setIsBookingUpdating(false);
     }
   }
 
@@ -480,6 +604,53 @@ export function ResortDashboard({
     }
   }
 
+  async function saveHomestayEdits(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!userId) {
+      setEditHomestaySaveError("Sign in before editing a homestay.");
+      return;
+    }
+
+    if (!homestayEditForm.homestayId) {
+      setEditHomestaySaveError("Select a homestay to edit.");
+      return;
+    }
+
+    setIsHomestayUpdating(true);
+    setEditHomestaySaveError("");
+
+    try {
+      await updateHomestay({
+        id: homestayEditForm.homestayId,
+        name: homestayEditForm.name,
+        location: homestayEditForm.location,
+        managerName: homestayEditForm.managerName,
+        units: homestayEditForm.units,
+        nightlyRate: homestayEditForm.nightlyRate,
+        status: homestayEditForm.status,
+      });
+
+      const refreshedData = await fetchDashboardData();
+
+      setData(refreshedData);
+      setBookingForm((current) =>
+        ensureBookingFormDefaults(current, refreshedData),
+      );
+      setBookingEntryForm((current) =>
+        ensureBookingEntryFormDefaults(current, refreshedData),
+      );
+      setShowEditHomestayModal(false);
+      setActiveModule("homestays");
+    } catch (error) {
+      setEditHomestaySaveError(
+        error instanceof Error ? error.message : "Unable to update homestay.",
+      );
+    } finally {
+      setIsHomestayUpdating(false);
+    }
+  }
+
   async function addCustomer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -525,6 +696,52 @@ export function ResortDashboard({
       );
     } finally {
       setIsCustomerSaving(false);
+    }
+  }
+
+  async function saveCustomerEdits(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!userId) {
+      setEditCustomerSaveError("Sign in before editing a customer.");
+      return;
+    }
+
+    if (!customerEditForm.customerId) {
+      setEditCustomerSaveError("Select a customer to edit.");
+      return;
+    }
+
+    setIsCustomerUpdating(true);
+    setEditCustomerSaveError("");
+
+    try {
+      await updateCustomer({
+        id: customerEditForm.customerId,
+        fullName: customerEditForm.fullName,
+        phone: customerEditForm.phone,
+        email: customerEditForm.email,
+        city: customerEditForm.city,
+        preferences: customerEditForm.preferences,
+      });
+
+      const refreshedData = await fetchDashboardData();
+
+      setData(refreshedData);
+      setBookingForm((current) =>
+        ensureBookingFormDefaults(current, refreshedData),
+      );
+      setBookingEntryForm((current) =>
+        ensureBookingEntryFormDefaults(current, refreshedData),
+      );
+      setShowEditCustomerModal(false);
+      setActiveModule("customers");
+    } catch (error) {
+      setEditCustomerSaveError(
+        error instanceof Error ? error.message : "Unable to update customer.",
+      );
+    } finally {
+      setIsCustomerUpdating(false);
     }
   }
 
@@ -667,6 +884,53 @@ export function ResortDashboard({
     setBookingEntrySaveError("");
     setShowQuickBookingModal(false);
     setShowBookingEntryModal(true);
+  }
+
+  function openEditBookingModal(booking: Booking) {
+    setBookingEditForm({
+      bookingId: booking.id,
+      customerId: booking.customerId,
+      homestayId: booking.homestayId,
+      roomId: booking.roomId ?? "",
+      checkIn: booking.checkIn,
+      checkOut: booking.checkOut,
+      guests: booking.guests,
+      amount: booking.amount,
+      paid: booking.paid,
+      channel: booking.channel,
+      status: booking.status,
+    });
+    setEditBookingSaveError("");
+    setShowQuickBookingModal(false);
+    setShowBookingEntryModal(false);
+    setShowEditBookingModal(true);
+  }
+
+  function openEditHomestayModal(homestay: Homestay) {
+    setHomestayEditForm({
+      homestayId: homestay.id,
+      name: homestay.name,
+      location: homestay.location,
+      managerName: homestay.manager === "Unassigned" ? "" : homestay.manager,
+      units: homestay.units,
+      nightlyRate: homestay.nightlyRate,
+      status: homestay.status,
+    });
+    setEditHomestaySaveError("");
+    setShowEditHomestayModal(true);
+  }
+
+  function openEditCustomerModal(customer: DashboardData["customers"][number]) {
+    setCustomerEditForm({
+      customerId: customer.id,
+      fullName: customer.name,
+      phone: customer.phone,
+      email: customer.email,
+      city: customer.city,
+      preferences: customer.preference,
+    });
+    setEditCustomerSaveError("");
+    setShowEditCustomerModal(true);
   }
 
   return (
@@ -847,7 +1111,7 @@ export function ResortDashboard({
                 </h1>
               </div>
 
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+              <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-end">
                 <label className="relative min-w-0 lg:w-64">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <input
@@ -895,7 +1159,7 @@ export function ResortDashboard({
                   </button>
                 </div>
 
-                <div className="hidden items-center gap-3 lg:flex">
+                <div className="hidden items-center gap-3 lg:flex lg:flex-wrap lg:justify-end">
                   <Link
                     href="/bookings"
                     className="inline-flex h-10 min-w-36 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800"
@@ -981,22 +1245,26 @@ export function ResortDashboard({
               />
             )}
 
-            <DateFilterBar
-              dateFrom={dateFrom}
-              dateTo={dateTo}
-              onDateFromChange={setDateFrom}
-              onDateToChange={setDateTo}
-              onClear={() => {
-                setDateFrom("");
-                setDateTo("");
-              }}
-            />
+            {showDashboardSummary && (
+              <>
+                <DateFilterBar
+                  dateFrom={dateFrom}
+                  dateTo={dateTo}
+                  onDateFromChange={setDateFrom}
+                  onDateToChange={setDateTo}
+                  onClear={() => {
+                    setDateFrom("");
+                    setDateTo("");
+                  }}
+                />
 
-            <MetricGrid
-              metrics={metrics}
-              bookings={visibleBookings}
-              accounts={visibleAccounts}
-            />
+                <MetricGrid
+                  metrics={metrics}
+                  bookings={visibleBookings}
+                  accounts={visibleAccounts}
+                />
+              </>
+            )}
 
             {activeModule === "overview" && (
               <OverviewFocus
@@ -1014,6 +1282,7 @@ export function ResortDashboard({
                   customers={customers}
                   homestays={homestays}
                   accountEntries={accountEntries}
+                  onEditBooking={openEditBookingModal}
                 />
                 <div className="space-y-5">
                   <QuickBookingForm
@@ -1043,16 +1312,31 @@ export function ResortDashboard({
               </div>
             )}
 
+            {activeModule === "calendar" && (
+              <BookingsCalendarView
+                bookings={visibleBookings}
+                customers={customers}
+                homestays={homestays}
+                month={calendarMonth}
+                onMonthChange={setCalendarMonth}
+              />
+            )}
+
             {activeModule === "homestays" && (
               <HomestayGrid
                 selectedHomestayId={selectedHomestayId}
                 homestays={homestays}
                 bookings={bookingList}
+                onEditHomestay={openEditHomestayModal}
               />
             )}
 
             {activeModule === "customers" && (
-              <CustomerTable query={query} customers={customers} />
+              <CustomerTable
+                query={query}
+                customers={customers}
+                onEditCustomer={openEditCustomerModal}
+              />
             )}
 
             {activeModule === "accounts" && (
@@ -1111,6 +1395,56 @@ export function ResortDashboard({
             variant="modal"
             onChange={setBookingEntryForm}
             onSubmit={addBookingEntry}
+          />
+        </DashboardModal>
+      )}
+
+      {showEditBookingModal && (
+        <DashboardModal
+          ariaLabel="Edit booking"
+          onClose={() => setShowEditBookingModal(false)}
+        >
+          <BookingEditFormPanel
+            form={bookingEditForm}
+            customers={customers}
+            homestays={homestays}
+            rooms={editFormRooms}
+            isSaving={isBookingUpdating}
+            saveError={editBookingSaveError}
+            onChange={setBookingEditForm}
+            onSubmit={saveBookingEdits}
+          />
+        </DashboardModal>
+      )}
+
+      {showEditHomestayModal && (
+        <DashboardModal
+          ariaLabel="Edit homestay"
+          onClose={() => setShowEditHomestayModal(false)}
+        >
+          <HomestayEditFormPanel
+            form={homestayEditForm}
+            isSaving={isHomestayUpdating}
+            error={editHomestaySaveError}
+            disabled={!userId}
+            onChange={setHomestayEditForm}
+            onSubmit={saveHomestayEdits}
+          />
+        </DashboardModal>
+      )}
+
+      {showEditCustomerModal && (
+        <DashboardModal
+          ariaLabel="Edit customer"
+          onClose={() => setShowEditCustomerModal(false)}
+        >
+          <CustomerEditFormPanel
+            form={customerEditForm}
+            isSaving={isCustomerUpdating}
+            error={editCustomerSaveError}
+            disabled={!userId}
+            onChange={setCustomerEditForm}
+            onSubmit={saveCustomerEdits}
           />
         </DashboardModal>
       )}
@@ -1336,6 +1670,13 @@ function DateFilterBar({
   onClear: () => void;
 }) {
   const hasFilter = Boolean(dateFrom || dateTo);
+  const [isRangeOpen, setIsRangeOpen] = useState(false);
+
+  function setRange(from: string, to: string) {
+    onDateFromChange(from);
+    onDateToChange(to);
+    setIsRangeOpen(false);
+  }
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -1348,26 +1689,108 @@ function DateFilterBar({
             Filters bookings by stay dates and accounts by entry date.
           </p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-[170px_170px_auto]">
-          <Field label="From">
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(event) => onDateFromChange(event.target.value)}
-              className="field-control"
-            />
-          </Field>
-          <Field label="To">
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(event) => onDateToChange(event.target.value)}
-              className="field-control"
-            />
-          </Field>
+        <div className="grid gap-3 sm:grid-cols-[minmax(260px,360px)_auto]">
+          <div className="relative">
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Date range
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsRangeOpen((current) => !current)}
+              aria-expanded={isRangeOpen}
+              className="inline-flex h-10 w-full items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 text-left text-sm font-semibold text-slate-800 transition hover:border-teal-300"
+            >
+              <span className="inline-flex min-w-0 items-center gap-2">
+                <CalendarDays className="h-4 w-4 shrink-0 text-teal-700" />
+                <span className="truncate">
+                  {formatDateRangeLabel(dateFrom, dateTo)}
+                </span>
+              </span>
+              <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />
+            </button>
+            {isRangeOpen && (
+              <div className="absolute right-0 z-30 mt-2 w-full rounded-lg border border-slate-200 bg-white p-3 shadow-lg sm:w-[360px]">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="Start date">
+                    <input
+                      type="date"
+                      value={dateFrom}
+                      max={dateTo || undefined}
+                      onChange={(event) => {
+                        const nextFrom = event.target.value;
+
+                        onDateFromChange(nextFrom);
+
+                        if (dateTo && nextFrom && nextFrom > dateTo) {
+                          onDateToChange(nextFrom);
+                        }
+                      }}
+                      className="field-control"
+                    />
+                  </Field>
+                  <Field label="End date">
+                    <input
+                      type="date"
+                      value={dateTo}
+                      min={dateFrom || undefined}
+                      onChange={(event) => {
+                        const nextTo = event.target.value;
+
+                        onDateToChange(nextTo);
+
+                        if (dateFrom && nextTo && nextTo < dateFrom) {
+                          onDateFromChange(nextTo);
+                        }
+                      }}
+                      className="field-control"
+                    />
+                  </Field>
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRange(todayIso(), todayIso())}
+                    className="rounded-md border border-slate-200 px-2 py-2 text-xs font-semibold text-slate-700 transition hover:border-teal-300 hover:text-teal-800"
+                  >
+                    Today
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setRange(todayIso(), addDaysIso(new Date(), 6))
+                    }
+                    className="rounded-md border border-slate-200 px-2 py-2 text-xs font-semibold text-slate-700 transition hover:border-teal-300 hover:text-teal-800"
+                  >
+                    Next 7 days
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setRange(startOfMonthIso(new Date()), endOfMonthIso(new Date()))
+                    }
+                    className="rounded-md border border-slate-200 px-2 py-2 text-xs font-semibold text-slate-700 transition hover:border-teal-300 hover:text-teal-800"
+                  >
+                    This month
+                  </button>
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setIsRangeOpen(false)}
+                    className="rounded-md bg-teal-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-teal-800"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           <button
             type="button"
-            onClick={onClear}
+            onClick={() => {
+              onClear();
+              setIsRangeOpen(false);
+            }}
             disabled={!hasFilter}
             className="inline-flex h-10 items-center justify-center gap-2 self-end rounded-md border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
           >
@@ -1380,16 +1803,235 @@ function DateFilterBar({
   );
 }
 
+function BookingsCalendarView({
+  bookings,
+  customers,
+  homestays,
+  month,
+  onMonthChange,
+}: {
+  bookings: Booking[];
+  customers: DashboardData["customers"];
+  homestays: Homestay[];
+  month: string;
+  onMonthChange: (month: string) => void;
+}) {
+  const days = buildCalendarDays(month);
+  const monthBookings = bookings.filter((booking) =>
+    doesStayOverlapRange(
+      booking.checkIn,
+      booking.checkOut,
+      `${month}-01`,
+      days[days.length - 1].date,
+    ),
+  );
+
+  return (
+    <section className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-3 border-b border-slate-200 p-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-slate-950">
+            Bookings calendar
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Month view of occupied nights across selected homestays.
+          </p>
+        </div>
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 sm:flex">
+          <button
+            type="button"
+            onClick={() => onMonthChange(shiftMonth(month, -1))}
+            className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+          >
+            Prev
+          </button>
+          <div className="min-w-36 rounded-md border border-slate-200 px-3 py-2 text-center text-sm font-semibold text-slate-950">
+            {formatMonthLabel(month)}
+          </div>
+          <button
+            type="button"
+            onClick={() => onMonthChange(shiftMonth(month, 1))}
+            className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+          >
+            Next
+          </button>
+          <button
+            type="button"
+            onClick={() => onMonthChange(todayMonth())}
+            className="col-span-3 inline-flex h-9 items-center justify-center rounded-md bg-slate-950 px-3 text-sm font-semibold text-white transition hover:bg-slate-800 sm:col-auto"
+          >
+            Today
+          </button>
+        </div>
+      </div>
+
+      {monthBookings.length === 0 && (
+        <EmptyState message="No bookings fall inside this calendar month for the current filters." />
+      )}
+
+      <div className="hidden min-w-0 md:block">
+        <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+            <div key={day} className="px-3 py-2">
+              {day}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7">
+          {days.map((day) => {
+            const dayBookings = monthBookings.filter((booking) =>
+              isBookingOnCalendarDay(booking, day.date),
+            );
+
+            return (
+              <div
+                key={day.date}
+                className={`min-h-36 border-b border-r border-slate-100 p-2 ${
+                  day.inMonth ? "bg-white" : "bg-slate-50 text-slate-400"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span
+                    className={`grid h-7 w-7 place-items-center rounded-md text-sm font-semibold ${
+                      day.date === todayIso()
+                        ? "bg-teal-700 text-white"
+                        : "text-slate-700"
+                    }`}
+                  >
+                    {day.dayNumber}
+                  </span>
+                  {dayBookings.length > 0 && (
+                    <span className="text-xs font-medium text-slate-500">
+                      {dayBookings.length}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-2 space-y-1">
+                  {dayBookings.slice(0, 3).map((booking) => (
+                    <CalendarBookingChip
+                      key={booking.id}
+                      booking={booking}
+                      customer={customers.find(
+                        (item) => item.id === booking.customerId,
+                      )}
+                      homestay={homestays.find(
+                        (item) => item.id === booking.homestayId,
+                      )}
+                    />
+                  ))}
+                  {dayBookings.length > 3 && (
+                    <p className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">
+                      +{dayBookings.length - 3} more
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="divide-y divide-slate-100 md:hidden">
+        {days
+          .filter((day) => day.inMonth)
+          .map((day) => {
+            const dayBookings = monthBookings.filter((booking) =>
+              isBookingOnCalendarDay(booking, day.date),
+            );
+
+            return (
+              <div key={day.date} className="p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-950">
+                      {formatDate(day.date)}
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {dayBookings.length} bookings
+                    </p>
+                  </div>
+                  {day.date === todayIso() && (
+                    <span className="rounded-md bg-teal-50 px-2 py-1 text-xs font-semibold text-teal-700">
+                      Today
+                    </span>
+                  )}
+                </div>
+                <div className="mt-3 space-y-2">
+                  {dayBookings.length === 0 && (
+                    <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-500">
+                      No bookings.
+                    </p>
+                  )}
+                  {dayBookings.map((booking) => (
+                    <CalendarBookingChip
+                      key={booking.id}
+                      booking={booking}
+                      customer={customers.find(
+                        (item) => item.id === booking.customerId,
+                      )}
+                      homestay={homestays.find(
+                        (item) => item.id === booking.homestayId,
+                      )}
+                      roomy
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+      </div>
+    </section>
+  );
+}
+
+function CalendarBookingChip({
+  booking,
+  customer,
+  homestay,
+  roomy = false,
+}: {
+  booking: Booking;
+  customer?: DashboardData["customers"][number];
+  homestay?: Homestay;
+  roomy?: boolean;
+}) {
+  return (
+    <div
+      className={`min-w-0 rounded-md border px-2 py-1.5 ${statusStyles[booking.status]} ${
+        roomy ? "px-3 py-2" : ""
+      }`}
+    >
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <p className="truncate text-xs font-semibold">
+          {customer?.name ?? "Guest"}
+        </p>
+        <span className="shrink-0 text-xs">{booking.guests} guests</span>
+      </div>
+      <p className="mt-0.5 truncate text-xs opacity-80">
+        {homestay?.name ?? "Homestay"} - {booking.room}
+      </p>
+      {roomy && (
+        <p className="mt-1 text-xs opacity-80">
+          {formatDate(booking.checkIn)} to {formatDate(booking.checkOut)} -{" "}
+          {inr.format(booking.amount)}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function BookingTable({
   bookings: visibleBookings,
   customers,
   homestays,
   accountEntries,
+  onEditBooking,
 }: {
   bookings: Booking[];
   customers: DashboardData["customers"];
   homestays: Homestay[];
   accountEntries: AccountEntry[];
+  onEditBooking: (booking: Booking) => void;
 }) {
   return (
     <section className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -1467,6 +2109,14 @@ function BookingTable({
                 entries={bookingEntries}
                 netAdjustment={netAdjustment}
               />
+              <button
+                type="button"
+                onClick={() => onEditBooking(booking)}
+                className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-slate-200 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+              >
+                <Pencil className="h-4 w-4" />
+                Edit booking
+              </button>
             </article>
           );
         })}
@@ -1481,6 +2131,7 @@ function BookingTable({
               <th className="px-4 py-3 font-semibold">Stay</th>
               <th className="px-4 py-3 font-semibold">Status</th>
               <th className="px-4 py-3 text-right font-semibold">Amount</th>
+              <th className="px-4 py-3 text-right font-semibold">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -1549,6 +2200,16 @@ function BookingTable({
                     <p className="mt-1 text-xs text-slate-500">
                       {inr.format(booking.amount - booking.paid)} due
                     </p>
+                  </td>
+                  <td className="px-4 py-4 text-right">
+                    <button
+                      type="button"
+                      onClick={() => onEditBooking(booking)}
+                      className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Edit
+                    </button>
                   </td>
                 </tr>
               );
@@ -1734,6 +2395,208 @@ function QuickBookingForm({
         >
           <Plus className="h-4 w-4" />
           {isSaving ? "Saving" : "Save booking"}
+        </button>
+        {saveError && (
+          <p className="text-sm font-medium text-red-700">{saveError}</p>
+        )}
+      </form>
+    </section>
+  );
+}
+
+function BookingEditFormPanel({
+  form,
+  customers,
+  homestays,
+  rooms,
+  isSaving,
+  saveError,
+  onChange,
+  onSubmit,
+}: {
+  form: BookingEditForm;
+  customers: DashboardData["customers"];
+  homestays: Homestay[];
+  rooms: Room[];
+  isSaving: boolean;
+  saveError: string;
+  onChange: (form: BookingEditForm) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const canSubmit = Boolean(
+    form.bookingId &&
+      form.customerId &&
+      form.homestayId &&
+      form.checkIn &&
+      form.checkOut &&
+      !isSaving,
+  );
+
+  return (
+    <section className="min-w-0 bg-white">
+      <h2 className="text-base font-semibold text-slate-950">Edit booking</h2>
+      <p className="mt-1 break-all text-sm text-slate-500">
+        Update reservation details, payment, status, and amount for {form.bookingId}.
+      </p>
+
+      <form className="mt-5 space-y-4" onSubmit={onSubmit}>
+        <div>
+          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Customer
+          </span>
+          <SearchableCustomerSelect
+            key={form.customerId}
+            customers={customers}
+            selectedCustomerId={form.customerId}
+            onSelect={(customerId) => onChange({ ...form, customerId })}
+          />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Homestay">
+            <select
+              value={form.homestayId}
+              onChange={(event) => {
+                const nextHomestayId = event.target.value;
+
+                onChange({ ...form, homestayId: nextHomestayId, roomId: "" });
+              }}
+              className="field-control"
+              disabled={homestays.length === 0}
+            >
+              {homestays.length === 0 && (
+                <option value="">No homestays found</option>
+              )}
+              {homestays.map((homestay) => (
+                <option key={homestay.id} value={homestay.id}>
+                  {homestay.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Room">
+            <select
+              value={form.roomId}
+              onChange={(event) =>
+                onChange({ ...form, roomId: event.target.value })
+              }
+              className="field-control"
+            >
+              <option value="">No room assigned</option>
+              {rooms.map((room) => (
+                <option key={room.id} value={room.id}>
+                  {room.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Check in">
+            <input
+              type="date"
+              value={form.checkIn}
+              onChange={(event) =>
+                onChange({ ...form, checkIn: event.target.value })
+              }
+              className="field-control"
+            />
+          </Field>
+          <Field label="Check out">
+            <input
+              type="date"
+              value={form.checkOut}
+              onChange={(event) =>
+                onChange({ ...form, checkOut: event.target.value })
+              }
+              className="field-control"
+            />
+          </Field>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Status">
+            <select
+              value={form.status}
+              onChange={(event) =>
+                onChange({
+                  ...form,
+                  status: event.target.value as BookingStatus,
+                })
+              }
+              className="field-control"
+            >
+              {(Object.keys(statusLabels) as BookingStatus[]).map((status) => (
+                <option key={status} value={status}>
+                  {statusLabels[status]}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Channel">
+            <select
+              value={form.channel}
+              onChange={(event) =>
+                onChange({
+                  ...form,
+                  channel: event.target.value as Booking["channel"],
+                })
+              }
+              className="field-control"
+            >
+              {["Direct", "Airbnb", "Booking.com", "Walk-in"].map((channel) => (
+                <option key={channel} value={channel}>
+                  {channel}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label="Guests">
+            <input
+              type="number"
+              min="1"
+              value={form.guests}
+              onChange={(event) =>
+                onChange({ ...form, guests: Number(event.target.value) })
+              }
+              className="field-control"
+            />
+          </Field>
+          <Field label="Amount">
+            <input
+              type="number"
+              min="0"
+              value={form.amount}
+              onChange={(event) =>
+                onChange({ ...form, amount: Number(event.target.value) })
+              }
+              className="field-control"
+            />
+          </Field>
+          <Field label="Paid">
+            <input
+              type="number"
+              min="0"
+              value={form.paid}
+              onChange={(event) =>
+                onChange({ ...form, paid: Number(event.target.value) })
+              }
+              className="field-control"
+            />
+          </Field>
+        </div>
+
+        <button
+          type="submit"
+          disabled={!canSubmit}
+          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+        >
+          <Pencil className="h-4 w-4" />
+          {isSaving ? "Saving changes" : "Update booking"}
         </button>
         {saveError && (
           <p className="text-sm font-medium text-red-700">{saveError}</p>
@@ -2241,6 +3104,129 @@ function HomestayCreateForm({
   );
 }
 
+function HomestayEditFormPanel({
+  form,
+  isSaving,
+  error,
+  disabled,
+  onChange,
+  onSubmit,
+}: {
+  form: HomestayEditForm;
+  isSaving: boolean;
+  error: string;
+  disabled: boolean;
+  onChange: (form: HomestayEditForm) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const canSubmit = Boolean(
+    form.homestayId && form.name && form.location && form.units > 0 && !isSaving,
+  );
+
+  return (
+    <section className="min-w-0 bg-white">
+      <h2 className="text-base font-semibold text-slate-950">Edit Homestay</h2>
+      <p className="mt-1 text-sm text-slate-500">
+        Update property details, manager, units, status, and nightly rate.
+      </p>
+
+      <form className="mt-5 grid gap-4 sm:grid-cols-2" onSubmit={onSubmit}>
+        <Field label="Homestay name">
+          <input
+            value={form.name}
+            onChange={(event) => onChange({ ...form, name: event.target.value })}
+            className="field-control"
+            required
+            disabled={disabled}
+          />
+        </Field>
+        <Field label="Location">
+          <input
+            value={form.location}
+            onChange={(event) =>
+              onChange({ ...form, location: event.target.value })
+            }
+            className="field-control"
+            required
+            disabled={disabled}
+          />
+        </Field>
+        <Field label="Manager">
+          <input
+            value={form.managerName}
+            onChange={(event) =>
+              onChange({ ...form, managerName: event.target.value })
+            }
+            className="field-control"
+            disabled={disabled}
+          />
+        </Field>
+        <Field label="Status">
+          <select
+            value={form.status}
+            onChange={(event) =>
+              onChange({
+                ...form,
+                status: event.target.value as Homestay["status"],
+              })
+            }
+            className="field-control"
+            disabled={disabled}
+          >
+            <option value="active">Active</option>
+            <option value="maintenance">Maintenance</option>
+            <option value="paused">Paused</option>
+          </select>
+        </Field>
+        <Field label="Units">
+          <input
+            type="number"
+            min="1"
+            value={form.units}
+            onChange={(event) =>
+              onChange({ ...form, units: Number(event.target.value) })
+            }
+            className="field-control"
+            required
+            disabled={disabled}
+          />
+        </Field>
+        <Field label="Nightly rate">
+          <input
+            type="number"
+            min="0"
+            value={form.nightlyRate}
+            onChange={(event) =>
+              onChange({ ...form, nightlyRate: Number(event.target.value) })
+            }
+            className="field-control"
+            required
+            disabled={disabled}
+          />
+        </Field>
+        <div className="sm:col-span-2">
+          <button
+            type="submit"
+            disabled={disabled || !canSubmit}
+            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            <Pencil className="h-4 w-4" />
+            {isSaving ? "Saving changes" : "Update Homestay"}
+          </button>
+          {disabled && (
+            <p className="mt-2 text-sm text-slate-500">
+              Sign in to Supabase before editing homestays.
+            </p>
+          )}
+          {error && (
+            <p className="mt-2 text-sm font-medium text-red-700">{error}</p>
+          )}
+        </div>
+      </form>
+    </section>
+  );
+}
+
 function CustomerCreateForm({
   form,
   isSaving,
@@ -2357,14 +3343,121 @@ function CustomerCreateForm({
   );
 }
 
+function CustomerEditFormPanel({
+  form,
+  isSaving,
+  error,
+  disabled,
+  onChange,
+  onSubmit,
+}: {
+  form: CustomerEditForm;
+  isSaving: boolean;
+  error: string;
+  disabled: boolean;
+  onChange: (form: CustomerEditForm) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const canSubmit = Boolean(
+    form.customerId && form.fullName && form.phone && !isSaving,
+  );
+
+  return (
+    <section className="min-w-0 bg-white">
+      <h2 className="text-base font-semibold text-slate-950">Edit Customer</h2>
+      <p className="mt-1 text-sm text-slate-500">
+        Update contact details and guest preferences.
+      </p>
+
+      <form className="mt-5 grid gap-4 sm:grid-cols-2" onSubmit={onSubmit}>
+        <Field label="Full name">
+          <input
+            value={form.fullName}
+            onChange={(event) =>
+              onChange({ ...form, fullName: event.target.value })
+            }
+            className="field-control"
+            required
+            disabled={disabled}
+          />
+        </Field>
+        <Field label="Phone">
+          <input
+            value={form.phone}
+            onChange={(event) =>
+              onChange({ ...form, phone: event.target.value })
+            }
+            className="field-control"
+            required
+            disabled={disabled}
+          />
+        </Field>
+        <Field label="Email">
+          <input
+            type="email"
+            value={form.email}
+            onChange={(event) =>
+              onChange({ ...form, email: event.target.value })
+            }
+            className="field-control"
+            disabled={disabled}
+          />
+        </Field>
+        <Field label="City">
+          <input
+            value={form.city}
+            onChange={(event) =>
+              onChange({ ...form, city: event.target.value })
+            }
+            className="field-control"
+            disabled={disabled}
+          />
+        </Field>
+        <div className="sm:col-span-2">
+          <Field label="Preferences">
+            <input
+              value={form.preferences}
+              onChange={(event) =>
+                onChange({ ...form, preferences: event.target.value })
+              }
+              className="field-control"
+              disabled={disabled}
+            />
+          </Field>
+        </div>
+        <div className="sm:col-span-2">
+          <button
+            type="submit"
+            disabled={disabled || !canSubmit}
+            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            <Pencil className="h-4 w-4" />
+            {isSaving ? "Saving changes" : "Update Customer"}
+          </button>
+          {disabled && (
+            <p className="mt-2 text-sm text-slate-500">
+              Sign in to Supabase before editing customers.
+            </p>
+          )}
+          {error && (
+            <p className="mt-2 text-sm font-medium text-red-700">{error}</p>
+          )}
+        </div>
+      </form>
+    </section>
+  );
+}
+
 function HomestayGrid({
   selectedHomestayId,
   homestays,
   bookings,
+  onEditHomestay,
 }: {
   selectedHomestayId: string;
   homestays: Homestay[];
   bookings: Booking[];
+  onEditHomestay: (homestay: Homestay) => void;
 }) {
   const visibleHomestays =
     selectedHomestayId === "all"
@@ -2378,6 +3471,7 @@ function HomestayGrid({
           key={homestay.id}
           homestay={homestay}
           bookings={bookings}
+          onEditHomestay={onEditHomestay}
         />
       ))}
     </section>
@@ -2387,9 +3481,11 @@ function HomestayGrid({
 function HomestayCard({
   homestay,
   bookings,
+  onEditHomestay,
 }: {
   homestay: Homestay;
   bookings: Booking[];
+  onEditHomestay: (homestay: Homestay) => void;
 }) {
   const homestayBookings = bookings.filter(
     (booking) => booking.homestayId === homestay.id,
@@ -2411,15 +3507,25 @@ function HomestayCard({
             {homestay.location}
           </p>
         </div>
-        <span
-          className={`rounded-md border px-2 py-1 text-xs font-semibold ${
-            homestay.status === "active"
-              ? "border-teal-200 bg-teal-50 text-teal-700"
-              : "border-amber-200 bg-amber-50 text-amber-700"
-          }`}
-        >
-          {homestay.status}
-        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          <span
+            className={`rounded-md border px-2 py-1 text-xs font-semibold ${
+              homestay.status === "active"
+                ? "border-teal-200 bg-teal-50 text-teal-700"
+                : "border-amber-200 bg-amber-50 text-amber-700"
+            }`}
+          >
+            {homestay.status}
+          </span>
+          <button
+            type="button"
+            onClick={() => onEditHomestay(homestay)}
+            className="grid h-8 w-8 place-items-center rounded-md border border-slate-200 text-slate-700 transition hover:border-slate-300"
+            aria-label={`Edit ${homestay.name}`}
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       <dl className="mt-5 grid grid-cols-3 gap-3">
@@ -2439,52 +3545,253 @@ function HomestayCard({
 function CustomerTable({
   query,
   customers,
+  onEditCustomer,
 }: {
   query: string;
   customers: DashboardData["customers"];
+  onEditCustomer: (customer: DashboardData["customers"][number]) => void;
 }) {
-  const visibleCustomers = customers.filter((customer) =>
-    `${customer.name} ${customer.phone} ${customer.email} ${customer.city}`
-      .toLowerCase()
-      .includes(query.toLowerCase()),
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [cityFilter, setCityFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const pageSize = 8;
+  const cityOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        customers
+          .map((customer) => customer.city.trim())
+          .filter(Boolean)
+          .sort((a, b) => a.localeCompare(b)),
+      ),
+    );
+  }, [customers]);
+  const visibleCustomers = useMemo(() => {
+    const globalTerm = query.trim().toLowerCase();
+    const localTerm = customerSearch.trim().toLowerCase();
+
+    return customers
+      .filter((customer) => {
+        const haystack =
+          `${customer.name} ${customer.phone} ${customer.email} ${customer.city} ${customer.preference}`.toLowerCase();
+        const matchesGlobal = !globalTerm || haystack.includes(globalTerm);
+        const matchesLocal = !localTerm || haystack.includes(localTerm);
+        const matchesCity =
+          cityFilter === "all" || customer.city === cityFilter;
+
+        return matchesGlobal && matchesLocal && matchesCity;
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [cityFilter, customerSearch, customers, query]);
+  const totalPages = Math.max(1, Math.ceil(visibleCustomers.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const paginatedCustomers = visibleCustomers.slice(
+    pageStart,
+    pageStart + pageSize,
   );
 
   return (
     <section className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-200 p-4">
-        <h2 className="text-base font-semibold text-slate-950">
-          Customer module
-        </h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Guest profiles, stay history, contact details, and preferences.
-        </p>
+      <div className="flex flex-col gap-4 border-b border-slate-200 p-4 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-slate-950">
+            Customers
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Full guest list with contact details, stay history, and preferences.
+          </p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,260px)_180px]">
+          <label className="relative min-w-0">
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Filter customers
+            </span>
+            <Search className="pointer-events-none absolute left-3 top-[34px] h-4 w-4 text-slate-400" />
+            <input
+              value={customerSearch}
+              onChange={(event) => {
+                setCustomerSearch(event.target.value);
+                setPage(1);
+              }}
+              className="h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-800 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+              placeholder="Name, phone, email"
+            />
+          </label>
+          <Field label="City">
+            <select
+              value={cityFilter}
+              onChange={(event) => {
+                setCityFilter(event.target.value);
+                setPage(1);
+              }}
+              className="field-control"
+            >
+              <option value="all">All cities</option>
+              {cityOptions.map((city) => (
+                <option key={city} value={city}>
+                  {city}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
       </div>
 
-      <div className="grid divide-y divide-slate-100">
+      <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+        <p>
+          Showing {visibleCustomers.length === 0 ? 0 : pageStart + 1}-
+          {Math.min(pageStart + pageSize, visibleCustomers.length)} of{" "}
+          {visibleCustomers.length} customers
+        </p>
+        {(customerSearch || cityFilter !== "all") && (
+          <button
+            type="button"
+            onClick={() => {
+              setCustomerSearch("");
+              setCityFilter("all");
+              setPage(1);
+            }}
+            className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+          >
+            <Filter className="h-4 w-4" />
+            Clear filters
+          </button>
+        )}
+      </div>
+
+      <div className="divide-y divide-slate-100 md:hidden">
         {visibleCustomers.length === 0 && (
           <EmptyState message="No customers matched the current search." />
         )}
-        {visibleCustomers.map((customer) => (
-          <div
-            key={customer.id}
-            className="grid gap-4 p-4 md:grid-cols-[minmax(0,1fr)_140px_180px] md:items-center"
-          >
-            <div>
-              <p className="font-semibold text-slate-950">{customer.name}</p>
-              <p className="mt-1 text-sm text-slate-500">
-                {customer.phone} - {customer.email}
-              </p>
-              <p className="mt-2 text-xs font-medium text-slate-500">
-                {customer.preference}
-              </p>
+        {paginatedCustomers.map((customer) => (
+          <article key={customer.id} className="space-y-3 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate font-semibold text-slate-950">
+                  {customer.name}
+                </p>
+                <p className="mt-1 text-sm text-slate-500">
+                  {customer.phone || "No phone"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onEditCustomer(customer)}
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-slate-200 text-slate-700 transition hover:border-slate-300"
+                aria-label={`Edit ${customer.name}`}
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
             </div>
-            <Stat label="Stays" value={String(customer.stays)} />
-            <Stat
-              label="Lifetime value"
-              value={inr.format(customer.lifetimeValue)}
-            />
-          </div>
+            <div className="grid gap-2 text-sm text-slate-500">
+              <p>{customer.email || "No email"}</p>
+              <p>{customer.city || "No city"}</p>
+              <p>{customer.preference || "No preferences recorded"}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Stat label="Stays" value={String(customer.stays)} />
+              <Stat
+                label="Lifetime value"
+                value={inr.format(customer.lifetimeValue)}
+              />
+            </div>
+          </article>
         ))}
+      </div>
+
+      <div className="hidden overflow-x-auto md:block">
+        <table className="min-w-full text-left text-sm">
+          <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <tr>
+              <th className="px-4 py-3 font-semibold">Customer</th>
+              <th className="px-4 py-3 font-semibold">Contact</th>
+              <th className="px-4 py-3 font-semibold">City</th>
+              <th className="px-4 py-3 font-semibold">Preferences</th>
+              <th className="px-4 py-3 text-right font-semibold">Stays</th>
+              <th className="px-4 py-3 text-right font-semibold">Lifetime</th>
+              <th className="px-4 py-3 text-right font-semibold">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {visibleCustomers.length === 0 && (
+              <tr>
+                <td colSpan={7}>
+                  <EmptyState message="No customers matched the current filters." />
+                </td>
+              </tr>
+            )}
+            {paginatedCustomers.map((customer) => (
+              <tr key={customer.id} className="hover:bg-slate-50">
+                <td className="px-4 py-4">
+                  <p className="font-semibold text-slate-950">
+                    {customer.name}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Last stay: {formatDate(customer.lastStay)}
+                  </p>
+                </td>
+                <td className="px-4 py-4">
+                  <p className="font-medium text-slate-900">
+                    {customer.phone || "No phone"}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {customer.email || "No email"}
+                  </p>
+                </td>
+                <td className="px-4 py-4 text-slate-600">
+                  {customer.city || "Unassigned"}
+                </td>
+                <td className="max-w-xs px-4 py-4">
+                  <p className="truncate text-slate-600">
+                    {customer.preference || "No preferences recorded"}
+                  </p>
+                </td>
+                <td className="px-4 py-4 text-right font-semibold text-slate-950">
+                  {customer.stays}
+                </td>
+                <td className="px-4 py-4 text-right font-semibold text-slate-950">
+                  {inr.format(customer.lifetimeValue)}
+                </td>
+                <td className="px-4 py-4 text-right">
+                  <button
+                    type="button"
+                    onClick={() => onEditCustomer(customer)}
+                    className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="flex flex-col gap-3 border-t border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-slate-500">
+          Page {currentPage} of {totalPages}
+        </p>
+        <div className="grid grid-cols-2 gap-2 sm:flex">
+          <button
+            type="button"
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+            disabled={currentPage === 1}
+            className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+          >
+            Previous
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setPage((current) => Math.min(totalPages, current + 1))
+            }
+            disabled={currentPage === totalPages}
+            className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+          >
+            Next
+          </button>
+        </div>
       </div>
     </section>
   );
@@ -2715,6 +4022,22 @@ function formatDate(value: string) {
   return dateFormatter.format(new Date(`${value}T00:00:00`));
 }
 
+function formatDateRangeLabel(from: string, to: string) {
+  if (from && to) {
+    return `${formatDate(from)} - ${formatDate(to)}`;
+  }
+
+  if (from) {
+    return `From ${formatDate(from)}`;
+  }
+
+  if (to) {
+    return `Until ${formatDate(to)}`;
+  }
+
+  return "All dates";
+}
+
 function isDateInRange(value: string, from: string, to: string) {
   if (!value) {
     return false;
@@ -2753,7 +4076,19 @@ function doesStayOverlapRange(
 }
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return toLocalIsoDate(new Date());
+}
+
+function todayMonth() {
+  return todayIso().slice(0, 7);
+}
+
+function startOfMonthIso(date: Date) {
+  return toLocalIsoDate(new Date(date.getFullYear(), date.getMonth(), 1));
+}
+
+function endOfMonthIso(date: Date) {
+  return toLocalIsoDate(new Date(date.getFullYear(), date.getMonth() + 1, 0));
 }
 
 function addDaysIso(date: Date, days: number) {
@@ -2761,7 +4096,61 @@ function addDaysIso(date: Date, days: number) {
 
   nextDate.setDate(nextDate.getDate() + days);
 
-  return nextDate.toISOString().slice(0, 10);
+  return toLocalIsoDate(nextDate);
+}
+
+function shiftMonth(month: string, amount: number) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const nextDate = new Date(year, monthNumber - 1 + amount, 1);
+
+  return toLocalIsoDate(nextDate).slice(0, 7);
+}
+
+function formatMonthLabel(month: string) {
+  const [year, monthNumber] = month.split("-").map(Number);
+
+  return new Intl.DateTimeFormat("en-IN", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(year, monthNumber - 1, 1));
+}
+
+function buildCalendarDays(month: string) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const firstDay = new Date(year, monthNumber - 1, 1);
+  const startDate = new Date(firstDay);
+  const monthIndex = firstDay.getMonth();
+
+  startDate.setDate(firstDay.getDate() - firstDay.getDay());
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(startDate);
+
+    date.setDate(startDate.getDate() + index);
+
+    return {
+      date: toLocalIsoDate(date),
+      dayNumber: date.getDate(),
+      inMonth: date.getMonth() === monthIndex,
+    };
+  });
+}
+
+function toLocalIsoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function isBookingOnCalendarDay(booking: Booking, day: string) {
+  const checkOutDisplayDay =
+    booking.checkOut > booking.checkIn
+      ? addDaysIso(new Date(`${booking.checkOut}T00:00:00`), -1)
+      : booking.checkOut;
+
+  return booking.checkIn <= day && checkOutDisplayDay >= day;
 }
 
 function resolveUserRole(role: unknown): UserRole {
