@@ -25,7 +25,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 
 import {
   createAccountEntry,
@@ -49,8 +49,18 @@ import type {
 const navItems: NavItem[] = [
   { key: "overview", label: "Overview", href: "/", icon: Home },
   { key: "homestays", label: "Homestays", href: "/homestays", icon: Building2 },
-  { key: "customers", label: "Customers", href: "/customers", icon: UsersRound },
-  { key: "bookings", label: "Bookings", href: "/bookings", icon: CalendarCheck },
+  {
+    key: "customers",
+    label: "Customers",
+    href: "/customers",
+    icon: UsersRound,
+  },
+  {
+    key: "bookings",
+    label: "Bookings",
+    href: "/bookings",
+    icon: CalendarCheck,
+  },
   { key: "accounts", label: "Accounts", href: "/accounts", icon: WalletCards },
 ];
 
@@ -159,6 +169,8 @@ export function ResortDashboard({
   const [activeRole, setActiveRole] = useState<UserRole>("Admin");
   const [userId, setUserId] = useState("");
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [showQuickBookingModal, setShowQuickBookingModal] = useState(false);
+  const [showBookingEntryModal, setShowBookingEntryModal] = useState(false);
   const [showHomestayForm, setShowHomestayForm] = useState(false);
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [showQuickCustomerModal, setShowQuickCustomerModal] = useState(false);
@@ -407,6 +419,7 @@ export function ResortDashboard({
       setBookingEntryForm((current) =>
         ensureBookingEntryFormDefaults(current, refreshedData),
       );
+      setShowQuickBookingModal(false);
       setActiveModule("bookings");
     } catch (error) {
       setSaveError(
@@ -608,6 +621,7 @@ export function ResortDashboard({
           refreshedData,
         ),
       );
+      setShowBookingEntryModal(false);
       setActiveModule("bookings");
     } catch (error) {
       setBookingEntrySaveError(
@@ -641,6 +655,18 @@ export function ResortDashboard({
     setShowHomestayForm(false);
     setActiveModule("customers");
     setIsMobileNavOpen(false);
+  }
+
+  function openQuickBookingModal() {
+    setSaveError("");
+    setShowBookingEntryModal(false);
+    setShowQuickBookingModal(true);
+  }
+
+  function openBookingEntryModal() {
+    setBookingEntrySaveError("");
+    setShowQuickBookingModal(false);
+    setShowBookingEntryModal(true);
   }
 
   return (
@@ -796,7 +822,7 @@ export function ResortDashboard({
               </button>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
-                  Multiple homestay manager
+                  Homely Accounts Manager
                 </p>
                 <h1 className="truncate text-lg font-semibold tracking-normal text-slate-950">
                   Reservations and cash flow
@@ -814,7 +840,7 @@ export function ResortDashboard({
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="hidden lg:block">
                 <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
-                  Multiple homestay manager
+                  Homely Accounts Manager
                 </p>
                 <h1 className="mt-1 text-2xl font-semibold tracking-normal text-slate-950 md:text-3xl">
                   Reservations, guests, and cash flow
@@ -849,6 +875,25 @@ export function ResortDashboard({
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                 </label>
+
+                <div className="grid grid-cols-2 gap-2 lg:hidden">
+                  <button
+                    type="button"
+                    onClick={openQuickBookingModal}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-teal-700 px-3 text-sm font-semibold text-white transition hover:bg-teal-800"
+                  >
+                    <CalendarCheck className="h-4 w-4" />
+                    Quick booking
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openBookingEntryModal}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 transition hover:border-slate-300"
+                  >
+                    <ReceiptText className="h-4 w-4" />
+                    Income/expense
+                  </button>
+                </div>
 
                 <div className="hidden items-center gap-3 lg:flex">
                   <Link
@@ -1027,6 +1072,47 @@ export function ResortDashboard({
           onSubmit={addQuickCustomer}
           onClose={() => setShowQuickCustomerModal(false)}
         />
+      )}
+
+      {showQuickBookingModal && (
+        <DashboardModal
+          ariaLabel="Quick booking"
+          onClose={() => setShowQuickBookingModal(false)}
+        >
+          <QuickBookingForm
+            form={bookingForm}
+            customers={customers}
+            homestays={homestays}
+            rooms={formRooms}
+            isSaving={isSaving}
+            saveError={saveError}
+            variant="modal"
+            onChange={setBookingForm}
+            onAddCustomerClick={() => {
+              setCustomerSaveError("");
+              setShowQuickCustomerModal(true);
+            }}
+            onSubmit={addBooking}
+          />
+        </DashboardModal>
+      )}
+
+      {showBookingEntryModal && (
+        <DashboardModal
+          ariaLabel="Booking income or expense"
+          onClose={() => setShowBookingEntryModal(false)}
+        >
+          <BookingEntryFormPanel
+            form={bookingEntryForm}
+            bookings={visibleBookings}
+            customers={customers}
+            isSaving={isBookingEntrySaving}
+            saveError={bookingEntrySaveError}
+            variant="modal"
+            onChange={setBookingEntryForm}
+            onSubmit={addBookingEntry}
+          />
+        </DashboardModal>
       )}
     </div>
   );
@@ -1377,7 +1463,10 @@ function BookingTable({
                   </p>
                 </div>
               </div>
-              <BookingEntryList entries={bookingEntries} netAdjustment={netAdjustment} />
+              <BookingEntryList
+                entries={bookingEntries}
+                netAdjustment={netAdjustment}
+              />
             </article>
           );
         })}
@@ -1402,7 +1491,10 @@ function BookingTable({
               const homestay = homestays.find(
                 (item) => item.id === booking.homestayId,
               );
-              const bookingEntries = getBookingEntries(accountEntries, booking.id);
+              const bookingEntries = getBookingEntries(
+                accountEntries,
+                booking.id,
+              );
               const netAdjustment = getEntryNet(bookingEntries);
 
               return (
@@ -1427,7 +1519,11 @@ function BookingTable({
                       {formatDate(booking.checkIn)} -{" "}
                       {formatDate(booking.checkOut)} - {booking.guests} guests
                     </p>
-                    <BookingEntryList entries={bookingEntries} netAdjustment={netAdjustment} compact />
+                    <BookingEntryList
+                      entries={bookingEntries}
+                      netAdjustment={netAdjustment}
+                      compact
+                    />
                   </td>
                   <td className="px-4 py-4">
                     <span
@@ -1471,6 +1567,7 @@ function QuickBookingForm({
   rooms,
   isSaving,
   saveError,
+  variant = "card",
   onChange,
   onAddCustomerClick,
   onSubmit,
@@ -1481,6 +1578,7 @@ function QuickBookingForm({
   rooms: Room[];
   isSaving: boolean;
   saveError: string;
+  variant?: "card" | "modal";
   onChange: (form: BookingForm) => void;
   onAddCustomerClick: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -1494,7 +1592,13 @@ function QuickBookingForm({
   );
 
   return (
-    <section className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <section
+      className={
+        variant === "modal"
+          ? "min-w-0 bg-white"
+          : "min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+      }
+    >
       <h2 className="text-base font-semibold text-slate-950">Quick booking</h2>
       <p className="mt-1 text-sm text-slate-500">
         Capture direct and walk-in enquiries without leaving the dashboard.
@@ -1510,9 +1614,7 @@ function QuickBookingForm({
               key={form.customerId}
               customers={customers}
               selectedCustomerId={form.customerId}
-              onSelect={(customerId) =>
-                onChange({ ...form, customerId })
-              }
+              onSelect={(customerId) => onChange({ ...form, customerId })}
             />
             <button
               type="button"
@@ -1681,7 +1783,9 @@ function SearchableCustomerSelect({
         }}
         onFocus={() => setIsOpen(true)}
         className="h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-8 text-sm text-slate-800 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
-        placeholder={customers.length === 0 ? "No customers found" : "Search customer"}
+        placeholder={
+          customers.length === 0 ? "No customers found" : "Search customer"
+        }
         disabled={customers.length === 0}
       />
       <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
@@ -1711,12 +1815,52 @@ function SearchableCustomerSelect({
             >
               <span className="block font-medium">{customer.name}</span>
               <span className="mt-0.5 block text-xs text-slate-500">
-                {customer.phone || customer.email || customer.city || "No contact details"}
+                {customer.phone ||
+                  customer.email ||
+                  customer.city ||
+                  "No contact details"}
               </span>
             </button>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function DashboardModal({
+  ariaLabel,
+  children,
+  onClose,
+}: {
+  ariaLabel: string;
+  children: ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      aria-label={ariaLabel}
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-50 grid place-items-end bg-slate-950/40 p-0 sm:place-items-center sm:p-4"
+    >
+      <button
+        type="button"
+        aria-label="Dismiss popup"
+        className="absolute inset-0"
+        onClick={onClose}
+      />
+      <div className="relative max-h-[92vh] w-full overflow-y-auto rounded-t-lg border border-slate-200 bg-white p-4 sm:max-w-2xl sm:rounded-lg">
+        <button
+          type="button"
+          aria-label="Close popup"
+          onClick={onClose}
+          className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 transition hover:border-slate-300"
+        >
+          <X className="h-4 w-4" />
+        </button>
+        <div className="w-full">{children}</div>
+      </div>
     </div>
   );
 }
@@ -1739,7 +1883,7 @@ function QuickCustomerModal({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4">
+    <div className="fixed inset-0 z-[60] grid place-items-center bg-slate-950/40 p-4">
       <div className="w-full max-w-2xl">
         <CustomerCreateForm
           form={form}
@@ -1761,6 +1905,7 @@ function BookingEntryFormPanel({
   customers,
   isSaving,
   saveError,
+  variant = "card",
   onChange,
   onSubmit,
 }: {
@@ -1769,35 +1914,56 @@ function BookingEntryFormPanel({
   customers: DashboardData["customers"];
   isSaving: boolean;
   saveError: string;
+  variant?: "card" | "modal";
   onChange: (form: BookingEntryForm) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
-  const canSubmit = Boolean(form.bookingId && form.category && form.label && form.amount > 0 && !isSaving);
+  const canSubmit = Boolean(
+    form.bookingId &&
+    form.category &&
+    form.label &&
+    form.amount > 0 &&
+    !isSaving,
+  );
 
   return (
-    <section className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <section
+      className={
+        variant === "modal"
+          ? "min-w-0 bg-white"
+          : "min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+      }
+    >
       <h2 className="text-base font-semibold text-slate-950">
         Booking income / expense
       </h2>
       <p className="mt-1 text-sm text-slate-500">
-        Add decoration, BBQ, camp fire, damage recovery, offers, or other booking-level items.
+        Add decoration, BBQ, camp fire, damage recovery, offers, or other
+        booking-level items.
       </p>
 
       <form className="mt-5 space-y-4" onSubmit={onSubmit}>
         <Field label="Booking">
           <select
             value={form.bookingId}
-            onChange={(event) => onChange({ ...form, bookingId: event.target.value })}
+            onChange={(event) =>
+              onChange({ ...form, bookingId: event.target.value })
+            }
             className="field-control"
             disabled={bookings.length === 0}
           >
-            {bookings.length === 0 && <option value="">No bookings found</option>}
+            {bookings.length === 0 && (
+              <option value="">No bookings found</option>
+            )}
             {bookings.map((booking) => {
-              const customer = customers.find((item) => item.id === booking.customerId);
+              const customer = customers.find(
+                (item) => item.id === booking.customerId,
+              );
 
               return (
                 <option key={booking.id} value={booking.id}>
-                  {booking.id.slice(0, 8)} - {customer?.name ?? "Guest"} - {formatDate(booking.checkIn)}
+                  {booking.id.slice(0, 8)} - {customer?.name ?? "Guest"} -{" "}
+                  {formatDate(booking.checkIn)}
                 </option>
               );
             })}
@@ -1808,7 +1974,12 @@ function BookingEntryFormPanel({
           <Field label="Type">
             <select
               value={form.type}
-              onChange={(event) => onChange({ ...form, type: event.target.value as BookingEntryForm["type"] })}
+              onChange={(event) =>
+                onChange({
+                  ...form,
+                  type: event.target.value as BookingEntryForm["type"],
+                })
+              }
               className="field-control"
             >
               <option value="income">Income</option>
@@ -1821,7 +1992,11 @@ function BookingEntryFormPanel({
               onChange={(event) => {
                 const category = event.target.value;
 
-                onChange({ ...form, category, label: defaultBookingEntryLabel(category) });
+                onChange({
+                  ...form,
+                  category,
+                  label: defaultBookingEntryLabel(category),
+                });
               }}
               className="field-control"
             >
@@ -1837,7 +2012,9 @@ function BookingEntryFormPanel({
         <Field label="Label">
           <input
             value={form.label}
-            onChange={(event) => onChange({ ...form, label: event.target.value })}
+            onChange={(event) =>
+              onChange({ ...form, label: event.target.value })
+            }
             className="field-control"
             required
           />
@@ -1849,7 +2026,9 @@ function BookingEntryFormPanel({
               type="number"
               min="0"
               value={form.amount}
-              onChange={(event) => onChange({ ...form, amount: Number(event.target.value) })}
+              onChange={(event) =>
+                onChange({ ...form, amount: Number(event.target.value) })
+              }
               className="field-control"
               required
             />
@@ -1858,7 +2037,9 @@ function BookingEntryFormPanel({
             <input
               type="checkbox"
               checked={form.isCleared}
-              onChange={(event) => onChange({ ...form, isCleared: event.target.checked })}
+              onChange={(event) =>
+                onChange({ ...form, isCleared: event.target.checked })
+              }
               className="h-4 w-4 rounded border-slate-300 text-teal-700"
             />
             Cleared
@@ -1873,7 +2054,9 @@ function BookingEntryFormPanel({
           <Plus className="h-4 w-4" />
           {isSaving ? "Saving item" : "Add to booking"}
         </button>
-        {saveError && <p className="text-sm font-medium text-red-700">{saveError}</p>}
+        {saveError && (
+          <p className="text-sm font-medium text-red-700">{saveError}</p>
+        )}
       </form>
     </section>
   );
@@ -1901,18 +2084,29 @@ function BookingEntryList({
         </p>
       )}
       {entries.slice(0, compact ? 2 : 4).map((entry) => (
-        <div key={entry.id} className="flex items-center justify-between gap-3 text-xs">
+        <div
+          key={entry.id}
+          className="flex items-center justify-between gap-3 text-xs"
+        >
           <span className="min-w-0 truncate text-slate-500">
             {entry.category}: {entry.label}
           </span>
-          <span className={entry.type === "income" ? "font-semibold text-teal-700" : "font-semibold text-red-700"}>
+          <span
+            className={
+              entry.type === "income"
+                ? "font-semibold text-teal-700"
+                : "font-semibold text-red-700"
+            }
+          >
             {entry.type === "income" ? "+" : "-"}
             {inr.format(entry.amount)}
           </span>
         </div>
       ))}
       {entries.length > (compact ? 2 : 4) && (
-        <p className="text-xs text-slate-400">+{entries.length - (compact ? 2 : 4)} more</p>
+        <p className="text-xs text-slate-400">
+          +{entries.length - (compact ? 2 : 4)} more
+        </p>
       )}
     </div>
   );
@@ -2537,7 +2731,12 @@ function isDateInRange(value: string, from: string, to: string) {
   return true;
 }
 
-function doesStayOverlapRange(checkIn: string, checkOut: string, from: string, to: string) {
+function doesStayOverlapRange(
+  checkIn: string,
+  checkOut: string,
+  from: string,
+  to: string,
+) {
   if (!from && !to) {
     return true;
   }
@@ -2628,7 +2827,9 @@ function ensureBookingEntryFormDefaults(
   current: BookingEntryForm,
   data: DashboardData,
 ): BookingEntryForm {
-  const bookingId = data.bookings.some((booking) => booking.id === current.bookingId)
+  const bookingId = data.bookings.some(
+    (booking) => booking.id === current.bookingId,
+  )
     ? current.bookingId
     : (data.bookings[0]?.id ?? "");
 
