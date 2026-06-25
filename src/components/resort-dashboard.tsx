@@ -15,12 +15,14 @@ import {
   Home,
   LogOut,
   MapPin,
+  Menu,
   Plus,
   ReceiptText,
   Search,
   ShieldCheck,
   UsersRound,
   WalletCards,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
@@ -156,6 +158,7 @@ export function ResortDashboard({
   const [sessionEmail, setSessionEmail] = useState("");
   const [activeRole, setActiveRole] = useState<UserRole>("Admin");
   const [userId, setUserId] = useState("");
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [showHomestayForm, setShowHomestayForm] = useState(false);
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [showQuickCustomerModal, setShowQuickCustomerModal] = useState(false);
@@ -626,9 +629,119 @@ export function ResortDashboard({
     setData(emptyDashboardData);
   }
 
+  function openHomestayForm() {
+    setShowHomestayForm((current) => !current);
+    setShowCustomerForm(false);
+    setActiveModule("homestays");
+    setIsMobileNavOpen(false);
+  }
+
+  function openCustomerForm() {
+    setShowCustomerForm((current) => !current);
+    setShowHomestayForm(false);
+    setActiveModule("customers");
+    setIsMobileNavOpen(false);
+  }
+
   return (
     <div className="min-h-screen bg-white text-slate-950">
       <div className="flex min-h-screen">
+        {isMobileNavOpen && (
+          <div className="fixed inset-0 z-50 lg:hidden">
+            <button
+              type="button"
+              aria-label="Close navigation"
+              className="absolute inset-0 bg-slate-950/50"
+              onClick={() => setIsMobileNavOpen(false)}
+            />
+            <aside className="relative flex h-full w-80 max-w-[86vw] flex-col bg-slate-950 px-4 py-5 text-white shadow-2xl">
+              <div className="mb-6 flex items-center justify-between gap-3 px-2">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-teal-400 text-slate-950">
+                    <BedDouble className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold leading-5">
+                      StayLedger
+                    </p>
+                    <p className="truncate text-xs text-slate-400">
+                      Homestay operations
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Close navigation"
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-white/10 text-slate-300 transition hover:bg-white/10 hover:text-white"
+                  onClick={() => setIsMobileNavOpen(false)}
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <nav className="space-y-1">
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeModule === item.key;
+
+                  return (
+                    <Link
+                      key={item.key}
+                      href={item.href}
+                      onClick={() => {
+                        setActiveModule(item.key);
+                        setIsMobileNavOpen(false);
+                      }}
+                      className={`flex h-11 w-full items-center gap-3 rounded-md px-3 text-sm font-medium transition ${
+                        isActive
+                          ? "bg-white text-slate-950"
+                          : "text-slate-300 hover:bg-slate-900 hover:text-white"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </nav>
+
+              <div className="mt-5 space-y-2 border-t border-white/10 pt-5">
+                <Link
+                  href="/bookings"
+                  onClick={() => setIsMobileNavOpen(false)}
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-md bg-teal-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-teal-400"
+                >
+                  <Plus className="h-4 w-4" />
+                  New booking
+                </Link>
+                <button
+                  type="button"
+                  onClick={openHomestayForm}
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/10"
+                >
+                  <Building2 className="h-4 w-4" />
+                  Add Homestay
+                </button>
+                <button
+                  type="button"
+                  onClick={openCustomerForm}
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/10"
+                >
+                  <UsersRound className="h-4 w-4" />
+                  Add Customer
+                </button>
+              </div>
+
+              <SidebarAuthCard
+                isConfigured={isSupabaseConfigured}
+                email={sessionEmail}
+                role={activeRole}
+                onSignOut={signOut}
+              />
+            </aside>
+          </div>
+        )}
+
         <aside className="hidden w-72 shrink-0 border-r border-slate-200 bg-slate-950 px-4 py-5 text-white lg:block">
           <div className="mb-8 flex items-center gap-3 px-2">
             <div className="grid h-10 w-10 place-items-center rounded-lg bg-teal-400 text-slate-950">
@@ -672,8 +785,34 @@ export function ResortDashboard({
 
         <main className="flex min-w-0 flex-1 flex-col bg-slate-50">
           <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur md:px-6">
+            <div className="mb-4 flex items-center justify-between gap-3 lg:hidden">
+              <button
+                type="button"
+                aria-label="Open navigation"
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-slate-200 bg-white text-slate-800 transition hover:border-slate-300"
+                onClick={() => setIsMobileNavOpen(true)}
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+                  Multiple homestay manager
+                </p>
+                <h1 className="truncate text-lg font-semibold tracking-normal text-slate-950">
+                  Reservations and cash flow
+                </h1>
+              </div>
+              <button
+                type="button"
+                aria-label="Notifications"
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 transition hover:border-slate-300"
+              >
+                <Bell className="h-4 w-4" />
+              </button>
+            </div>
+
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <div>
+              <div className="hidden lg:block">
                 <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
                   Multiple homestay manager
                 </p>
@@ -682,8 +821,8 @@ export function ResortDashboard({
                 </h1>
               </div>
 
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <label className="relative min-w-0 sm:w-64">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                <label className="relative min-w-0 lg:w-64">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <input
                     value={query}
@@ -699,7 +838,7 @@ export function ResortDashboard({
                     onChange={(event) =>
                       setSelectedHomestayId(event.target.value)
                     }
-                    className="h-10 w-full appearance-none rounded-md border border-slate-200 bg-white pl-3 pr-9 text-sm font-medium text-slate-800 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100 sm:w-56"
+                    className="h-10 w-full appearance-none rounded-md border border-slate-200 bg-white pl-3 pr-9 text-sm font-medium text-slate-800 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100 lg:w-56"
                   >
                     <option value="all">All homestays</option>
                     {homestays.map((homestay) => (
@@ -711,64 +850,42 @@ export function ResortDashboard({
                   <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                 </label>
 
-                <Link
-                  href="/bookings"
-                  className="inline-flex h-10 min-w-36 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800"
-                >
-                  <Plus className="h-4 w-4" />
-                  New booking
-                </Link>
+                <div className="hidden items-center gap-3 lg:flex">
+                  <Link
+                    href="/bookings"
+                    className="inline-flex h-10 min-w-36 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800"
+                  >
+                    <Plus className="h-4 w-4" />
+                    New booking
+                  </Link>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowHomestayForm((current) => !current);
-                    setShowCustomerForm(false);
-                    setActiveModule("homestays");
-                  }}
-                  className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-300"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Homestay
-                </button>
+                  <button
+                    type="button"
+                    onClick={openHomestayForm}
+                    className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-300"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Homestay
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCustomerForm((current) => !current);
-                    setShowHomestayForm(false);
-                    setActiveModule("customers");
-                  }}
-                  className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-300"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Customer
-                </button>
+                  <button
+                    type="button"
+                    onClick={openCustomerForm}
+                    className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-300"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Customer
+                  </button>
 
-                <button
-                  type="button"
-                  aria-label="Notifications"
-                  className="grid h-10 w-10 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 transition hover:border-slate-300"
-                >
-                  <Bell className="h-4 w-4" />
-                </button>
+                  <button
+                    type="button"
+                    aria-label="Notifications"
+                    className="grid h-10 w-10 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 transition hover:border-slate-300"
+                  >
+                    <Bell className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
-            </div>
-
-            <div className="mt-4 flex max-w-full gap-2 overflow-x-auto lg:hidden">
-              {navItems.map((item) => (
-                <Link
-                  key={item.key}
-                  href={item.href}
-                  className={`h-9 shrink-0 rounded-md px-3 text-sm font-medium ${
-                    activeModule === item.key
-                      ? "bg-slate-950 text-white"
-                      : "border border-slate-200 bg-white text-slate-700"
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              ))}
             </div>
           </header>
 
