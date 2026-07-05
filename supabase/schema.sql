@@ -100,6 +100,9 @@ create index if not exists bookings_status_idx on public.bookings (status);
 create index if not exists account_entries_homestay_id_idx on public.account_entries (homestay_id);
 create index if not exists account_entries_booking_id_idx on public.account_entries (booking_id);
 create index if not exists account_entries_date_idx on public.account_entries (entry_date desc);
+create index if not exists account_entries_common_expenses_idx
+  on public.account_entries (homestay_id, entry_date desc, id desc)
+  where entry_type = 'expense' and booking_id is null;
 
 alter table public.homestays enable row level security;
 alter table public.customers enable row level security;

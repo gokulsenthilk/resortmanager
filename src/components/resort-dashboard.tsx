@@ -22,6 +22,7 @@ import {
   ReceiptText,
   Search,
   ShieldCheck,
+  Trash2,
   UsersRound,
   WalletCards,
   X,
@@ -34,7 +35,11 @@ import {
   createBooking,
   createCustomer,
   createHomestay,
+  deleteAccountEntry,
+  fetchCommonExpenseHistory,
   fetchDashboardData,
+  syncBookingAccountEntries,
+  updateAccountEntry,
   updateBooking,
   updateCustomer,
   updateHomestay,
@@ -72,6 +77,7 @@ const navItems: NavItem[] = [
     href: "/calendar",
     icon: CalendarDays,
   },
+  { key: "expenses", label: "Expenses", href: "/expenses", icon: ReceiptText },
   { key: "accounts", label: "Accounts", href: "/accounts", icon: WalletCards },
 ];
 
@@ -117,6 +123,16 @@ type BookingForm = {
 type BookingEditForm = BookingForm & {
   bookingId: string;
   status: BookingStatus;
+  lineItems: BookingLineItemForm[];
+};
+
+type BookingLineItemForm = {
+  id?: string;
+  type: "income" | "expense";
+  category: string;
+  label: string;
+  amount: number;
+  isCleared: boolean;
 };
 
 type HomestayForm = {
@@ -125,10 +141,17 @@ type HomestayForm = {
   managerName: string;
   units: number;
   nightlyRate: number;
-  roomName: string;
+  rooms: HomestayRoomForm[];
 };
 
-type HomestayEditForm = Omit<HomestayForm, "roomName"> & {
+type HomestayRoomForm = {
+  id?: string;
+  name: string;
+  capacity: number;
+  nightlyRate: number;
+};
+
+type HomestayEditForm = HomestayForm & {
   homestayId: string;
   status: Homestay["status"];
 };
@@ -154,6 +177,15 @@ type BookingEntryForm = {
   isCleared: boolean;
 };
 
+type CommonExpenseForm = {
+  homestayId: string;
+  category: string;
+  label: string;
+  amount: number;
+  entryDate: string;
+  isCleared: boolean;
+};
+
 type UserRole = "Admin" | "Manager";
 
 const bookingEntryCategories = [
@@ -166,6 +198,22 @@ const bookingEntryCategories = [
   "Transport",
   "Other",
 ];
+
+const commonExpenseCategories = [
+  "Monthly rent",
+  "Maid salary",
+  "Housekeeping",
+  "Electricity",
+  "Internet",
+  "Laundry",
+  "Repairs",
+  "Maintenance",
+  "Supplies",
+  "Staff food",
+  "Other",
+];
+
+const expenseHistoryPageSize = 10;
 
 const emptyDashboardData: DashboardData = {
   homestays: [],
@@ -185,8 +233,22 @@ export function ResortDashboard({
   const [query, setQuery] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [expenseDateFrom, setExpenseDateFrom] = useState(
+    startOfMonthIso(new Date()),
+  );
+  const [expenseDateTo, setExpenseDateTo] = useState(endOfMonthIso(new Date()));
+  const [expenseHistoryPage, setExpenseHistoryPage] = useState(1);
+  const [expenseHistoryReloadKey, setExpenseHistoryReloadKey] = useState(0);
   const [calendarMonth, setCalendarMonth] = useState(todayMonth());
   const [data, setData] = useState<DashboardData>(emptyDashboardData);
+  const [commonExpenseHistory, setCommonExpenseHistory] = useState<
+    AccountEntry[]
+  >([]);
+  const [commonExpenseHistoryTotal, setCommonExpenseHistoryTotal] = useState(0);
+  const [isCommonExpenseHistoryLoading, setIsCommonExpenseHistoryLoading] =
+    useState(false);
+  const [commonExpenseHistoryError, setCommonExpenseHistoryError] =
+    useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [saveError, setSaveError] = useState("");
@@ -206,12 +268,16 @@ export function ResortDashboard({
   const [homestaySaveError, setHomestaySaveError] = useState("");
   const [customerSaveError, setCustomerSaveError] = useState("");
   const [bookingEntrySaveError, setBookingEntrySaveError] = useState("");
+  const [commonExpenseSaveError, setCommonExpenseSaveError] = useState("");
+  const [commonExpenseDeleteError, setCommonExpenseDeleteError] = useState("");
   const [editBookingSaveError, setEditBookingSaveError] = useState("");
   const [editHomestaySaveError, setEditHomestaySaveError] = useState("");
   const [editCustomerSaveError, setEditCustomerSaveError] = useState("");
   const [isHomestaySaving, setIsHomestaySaving] = useState(false);
   const [isCustomerSaving, setIsCustomerSaving] = useState(false);
   const [isBookingEntrySaving, setIsBookingEntrySaving] = useState(false);
+  const [isCommonExpenseSaving, setIsCommonExpenseSaving] = useState(false);
+  const [deletingCommonExpenseId, setDeletingCommonExpenseId] = useState("");
   const [isBookingUpdating, setIsBookingUpdating] = useState(false);
   const [isHomestayUpdating, setIsHomestayUpdating] = useState(false);
   const [isCustomerUpdating, setIsCustomerUpdating] = useState(false);
@@ -221,7 +287,7 @@ export function ResortDashboard({
     managerName: "",
     units: 1,
     nightlyRate: 0,
-    roomName: "",
+    rooms: [createBlankRoomForm()],
   });
   const [homestayEditForm, setHomestayEditForm] =
     useState<HomestayEditForm>({
@@ -231,6 +297,7 @@ export function ResortDashboard({
       managerName: "",
       units: 1,
       nightlyRate: 0,
+      rooms: [createBlankRoomForm()],
       status: "active",
     });
   const [customerForm, setCustomerForm] = useState<CustomerForm>({
@@ -271,6 +338,7 @@ export function ResortDashboard({
     paid: 0,
     channel: "Direct",
     status: "pending",
+    lineItems: [],
   });
   const [bookingEntryForm, setBookingEntryForm] = useState<BookingEntryForm>({
     bookingId: "",
@@ -280,6 +348,18 @@ export function ResortDashboard({
     amount: 0,
     isCleared: false,
   });
+  const [commonExpenseForm, setCommonExpenseForm] =
+    useState<CommonExpenseForm>({
+      homestayId: "",
+      category: "Monthly rent",
+      label: "Monthly rent paid",
+      amount: 0,
+      entryDate: todayIso(),
+      isCleared: true,
+    });
+  const [editingCommonExpenseId, setEditingCommonExpenseId] = useState("");
+  const [pendingDeleteCommonExpense, setPendingDeleteCommonExpense] =
+    useState<AccountEntry | null>(null);
   const {
     homestays,
     rooms,
@@ -335,6 +415,9 @@ export function ResortDashboard({
         setBookingEntryForm((current) =>
           ensureBookingEntryFormDefaults(current, dashboardData),
         );
+        setCommonExpenseForm((current) =>
+          ensureCommonExpenseFormDefaults(current, dashboardData),
+        );
       } catch (error) {
         if (isMounted) {
           setLoadError(
@@ -356,6 +439,77 @@ export function ResortDashboard({
       isMounted = false;
     };
   }, [sessionEmail]);
+
+  useEffect(() => {
+    if (!supabase || activeModule !== "expenses") {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadCommonExpenseHistory() {
+      setIsCommonExpenseHistoryLoading(true);
+      setCommonExpenseHistoryError("");
+
+      try {
+        const result = await fetchCommonExpenseHistory({
+          homestayId: selectedHomestayId,
+          dateFrom: expenseDateFrom,
+          dateTo: expenseDateTo,
+          page: expenseHistoryPage,
+          pageSize: expenseHistoryPageSize,
+        });
+
+        if (!isMounted) {
+          return;
+        }
+
+        setCommonExpenseHistory(result.entries);
+        setCommonExpenseHistoryTotal(result.totalCount);
+
+        const maxPage = Math.max(
+          1,
+          Math.ceil(result.totalCount / expenseHistoryPageSize),
+        );
+
+        if (expenseHistoryPage > maxPage) {
+          setExpenseHistoryPage(maxPage);
+        }
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setCommonExpenseHistoryError(
+          error instanceof Error
+            ? error.message
+            : "Unable to load expense history.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsCommonExpenseHistoryLoading(false);
+        }
+      }
+    }
+
+    loadCommonExpenseHistory();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    activeModule,
+    expenseDateFrom,
+    expenseDateTo,
+    expenseHistoryPage,
+    expenseHistoryReloadKey,
+    selectedHomestayId,
+  ]);
+
+  function updateSelectedHomestay(value: string) {
+    setSelectedHomestayId(value);
+    setExpenseHistoryPage(1);
+  }
 
   const visibleBookings = useMemo(() => {
     return bookingList.filter((booking) => {
@@ -397,6 +551,17 @@ export function ResortDashboard({
         isDateInRange(entry.date, dateFrom, dateTo),
     );
   }, [accountEntries, dateFrom, dateTo, selectedHomestayId]);
+
+  const filteredCommonExpenseTotal = useMemo(() => {
+    return accountEntries.filter(
+      (entry) =>
+        entry.type === "expense" &&
+        !entry.bookingId &&
+        (selectedHomestayId === "all" ||
+          entry.homestayId === selectedHomestayId) &&
+        isDateInRange(entry.date, expenseDateFrom, expenseDateTo),
+    ).reduce((total, entry) => total + entry.amount, 0);
+  }, [accountEntries, expenseDateFrom, expenseDateTo, selectedHomestayId]);
 
   const formRooms = useMemo(() => {
     return rooms.filter((room) => room.homestayId === bookingForm.homestayId);
@@ -533,6 +698,11 @@ export function ResortDashboard({
         channel: bookingEditForm.channel,
         status: bookingEditForm.status,
       });
+      await syncBookingAccountEntries(
+        bookingEditForm.bookingId,
+        bookingEditForm.homestayId,
+        bookingEditForm.lineItems,
+      );
 
       const refreshedData = await fetchDashboardData();
 
@@ -562,6 +732,16 @@ export function ResortDashboard({
       return;
     }
 
+    const roomsToSave = normalizeHomestayRoomForms(
+      homestayForm.rooms,
+      homestayForm.nightlyRate,
+    );
+
+    if (roomsToSave.length === 0) {
+      setHomestaySaveError("Add at least one room for this homestay.");
+      return;
+    }
+
     setIsHomestaySaving(true);
     setHomestaySaveError("");
 
@@ -571,9 +751,9 @@ export function ResortDashboard({
         name: homestayForm.name,
         location: homestayForm.location,
         managerName: homestayForm.managerName,
-        units: homestayForm.units,
+        units: roomsToSave.length,
         nightlyRate: homestayForm.nightlyRate,
-        roomName: homestayForm.roomName,
+        rooms: roomsToSave,
       });
 
       const refreshedData = await fetchDashboardData();
@@ -591,7 +771,7 @@ export function ResortDashboard({
         managerName: "",
         units: 1,
         nightlyRate: 0,
-        roomName: "",
+        rooms: [createBlankRoomForm()],
       });
       setShowHomestayForm(false);
       setActiveModule("homestays");
@@ -617,6 +797,16 @@ export function ResortDashboard({
       return;
     }
 
+    const roomsToSave = normalizeHomestayRoomForms(
+      homestayEditForm.rooms,
+      homestayEditForm.nightlyRate,
+    );
+
+    if (roomsToSave.length === 0) {
+      setEditHomestaySaveError("Keep at least one active room.");
+      return;
+    }
+
     setIsHomestayUpdating(true);
     setEditHomestaySaveError("");
 
@@ -626,9 +816,10 @@ export function ResortDashboard({
         name: homestayEditForm.name,
         location: homestayEditForm.location,
         managerName: homestayEditForm.managerName,
-        units: homestayEditForm.units,
+        units: roomsToSave.length,
         nightlyRate: homestayEditForm.nightlyRate,
         status: homestayEditForm.status,
+        rooms: roomsToSave,
       });
 
       const refreshedData = await fetchDashboardData();
@@ -851,6 +1042,144 @@ export function ResortDashboard({
     }
   }
 
+  async function addCommonExpense(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!userId) {
+      setCommonExpenseSaveError("Sign in before adding expenses.");
+      return;
+    }
+
+    if (!commonExpenseForm.homestayId) {
+      setCommonExpenseSaveError("Select a homestay for this expense.");
+      return;
+    }
+
+    if (commonExpenseForm.amount <= 0) {
+      setCommonExpenseSaveError("Enter an expense amount greater than zero.");
+      return;
+    }
+
+    setIsCommonExpenseSaving(true);
+    setCommonExpenseSaveError("");
+
+    try {
+      const payload = {
+        homestayId: commonExpenseForm.homestayId,
+        bookingId: null,
+        type: "expense" as const,
+        category: commonExpenseForm.category,
+        label: commonExpenseForm.label,
+        amount: commonExpenseForm.amount,
+        entryDate: commonExpenseForm.entryDate,
+        isCleared: commonExpenseForm.isCleared,
+      };
+
+      if (editingCommonExpenseId) {
+        await updateAccountEntry({
+          id: editingCommonExpenseId,
+          ...payload,
+        });
+      } else {
+        await createAccountEntry(payload);
+      }
+
+      const refreshedData = await fetchDashboardData();
+
+      setData(refreshedData);
+      setEditingCommonExpenseId("");
+      setExpenseHistoryPage(1);
+      setExpenseHistoryReloadKey((current) => current + 1);
+      setCommonExpenseForm((current) =>
+        ensureCommonExpenseFormDefaults(
+          {
+            ...current,
+            label: defaultCommonExpenseLabel(current.category),
+            amount: 0,
+            entryDate: todayIso(),
+            isCleared: true,
+          },
+          refreshedData,
+        ),
+      );
+      setActiveModule("expenses");
+    } catch (error) {
+      setCommonExpenseSaveError(
+        error instanceof Error ? error.message : "Unable to add expense.",
+      );
+    } finally {
+      setIsCommonExpenseSaving(false);
+    }
+  }
+
+  function requestDeleteCommonExpense(expense: AccountEntry) {
+    setPendingDeleteCommonExpense(expense);
+    setCommonExpenseDeleteError("");
+  }
+
+  async function confirmDeleteCommonExpense() {
+    const expense = pendingDeleteCommonExpense;
+
+    if (!expense) {
+      return;
+    }
+
+    setDeletingCommonExpenseId(expense.id);
+    setCommonExpenseDeleteError("");
+
+    try {
+      await deleteAccountEntry(expense.id);
+
+      const refreshedData = await fetchDashboardData();
+
+      setData(refreshedData);
+      setExpenseHistoryReloadKey((current) => current + 1);
+
+      if (editingCommonExpenseId === expense.id) {
+        cancelCommonExpenseEdit(refreshedData);
+      }
+
+      setPendingDeleteCommonExpense(null);
+    } catch (error) {
+      setCommonExpenseDeleteError(
+        error instanceof Error ? error.message : "Unable to delete expense.",
+      );
+    } finally {
+      setDeletingCommonExpenseId("");
+    }
+  }
+
+  function editCommonExpense(expense: AccountEntry) {
+    setEditingCommonExpenseId(expense.id);
+    setCommonExpenseSaveError("");
+    setCommonExpenseDeleteError("");
+    setCommonExpenseForm({
+      homestayId: expense.homestayId,
+      category: expense.category,
+      label: expense.label,
+      amount: expense.amount,
+      entryDate: expense.date,
+      isCleared: expense.status === "cleared",
+    });
+  }
+
+  function cancelCommonExpenseEdit(nextData = data) {
+    setEditingCommonExpenseId("");
+    setCommonExpenseSaveError("");
+    setCommonExpenseForm((current) =>
+      ensureCommonExpenseFormDefaults(
+        {
+          ...current,
+          label: defaultCommonExpenseLabel(current.category),
+          amount: 0,
+          entryDate: todayIso(),
+          isCleared: true,
+        },
+        nextData,
+      ),
+    );
+  }
+
   async function signOut() {
     if (!supabase) {
       return;
@@ -887,6 +1216,8 @@ export function ResortDashboard({
   }
 
   function openEditBookingModal(booking: Booking) {
+    const bookingEntries = getBookingEntries(accountEntries, booking.id);
+
     setBookingEditForm({
       bookingId: booking.id,
       customerId: booking.customerId,
@@ -899,6 +1230,14 @@ export function ResortDashboard({
       paid: booking.paid,
       channel: booking.channel,
       status: booking.status,
+      lineItems: bookingEntries.map((entry) => ({
+        id: entry.id,
+        type: entry.type,
+        category: entry.category,
+        label: entry.label,
+        amount: entry.amount,
+        isCleared: entry.status === "cleared",
+      })),
     });
     setEditBookingSaveError("");
     setShowQuickBookingModal(false);
@@ -907,13 +1246,26 @@ export function ResortDashboard({
   }
 
   function openEditHomestayModal(homestay: Homestay) {
+    const homestayRooms = rooms
+      .filter((room) => room.homestayId === homestay.id)
+      .map((room) => ({
+        id: room.id,
+        name: room.name,
+        capacity: room.capacity,
+        nightlyRate: room.nightlyRate,
+      }));
+
     setHomestayEditForm({
       homestayId: homestay.id,
       name: homestay.name,
       location: homestay.location,
       managerName: homestay.manager === "Unassigned" ? "" : homestay.manager,
-      units: homestay.units,
+      units: homestayRooms.length || homestay.units,
       nightlyRate: homestay.nightlyRate,
+      rooms:
+        homestayRooms.length > 0
+          ? homestayRooms
+          : [createBlankRoomForm(homestay.nightlyRate)],
       status: homestay.status,
     });
     setEditHomestaySaveError("");
@@ -1126,7 +1478,7 @@ export function ResortDashboard({
                   <select
                     value={selectedHomestayId}
                     onChange={(event) =>
-                      setSelectedHomestayId(event.target.value)
+                      updateSelectedHomestay(event.target.value)
                     }
                     className="h-10 w-full appearance-none rounded-md border border-slate-200 bg-white pl-3 pr-9 text-sm font-medium text-slate-800 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100 lg:w-56"
                   >
@@ -1326,6 +1678,7 @@ export function ResortDashboard({
               <HomestayGrid
                 selectedHomestayId={selectedHomestayId}
                 homestays={homestays}
+                rooms={rooms}
                 bookings={bookingList}
                 onEditHomestay={openEditHomestayModal}
               />
@@ -1337,6 +1690,52 @@ export function ResortDashboard({
                 customers={customers}
                 onEditCustomer={openEditCustomerModal}
               />
+            )}
+
+            {activeModule === "expenses" && (
+              <div className="space-y-5">
+                <DateFilterBar
+                  dateFrom={expenseDateFrom}
+                  dateTo={expenseDateTo}
+                  description="Filters expense history by entry date."
+                  onDateFromChange={(value) => {
+                    setExpenseDateFrom(value);
+                    setExpenseHistoryPage(1);
+                  }}
+                  onDateToChange={(value) => {
+                    setExpenseDateTo(value);
+                    setExpenseHistoryPage(1);
+                  }}
+                  onClear={() => {
+                    setExpenseDateFrom("");
+                    setExpenseDateTo("");
+                    setExpenseHistoryPage(1);
+                  }}
+                />
+                <CommonExpensesPanel
+                  form={commonExpenseForm}
+                  homestays={homestays}
+                  expenses={commonExpenseHistory}
+                  totalExpenses={filteredCommonExpenseTotal}
+                  totalCount={commonExpenseHistoryTotal}
+                  page={expenseHistoryPage}
+                  pageSize={expenseHistoryPageSize}
+                  isHistoryLoading={isCommonExpenseHistoryLoading}
+                  historyError={commonExpenseHistoryError}
+                  isSaving={isCommonExpenseSaving}
+                  saveError={commonExpenseSaveError}
+                  deleteError={commonExpenseDeleteError}
+                  disabled={!userId}
+                  editingExpenseId={editingCommonExpenseId}
+                  deletingExpenseId={deletingCommonExpenseId}
+                  onChange={setCommonExpenseForm}
+                  onSubmit={addCommonExpense}
+                  onEdit={editCommonExpense}
+                  onCancelEdit={() => cancelCommonExpenseEdit()}
+                  onDelete={requestDeleteCommonExpense}
+                  onPageChange={setExpenseHistoryPage}
+                />
+              </div>
             )}
 
             {activeModule === "accounts" && (
@@ -1445,6 +1844,25 @@ export function ResortDashboard({
             disabled={!userId}
             onChange={setCustomerEditForm}
             onSubmit={saveCustomerEdits}
+          />
+        </DashboardModal>
+      )}
+
+      {pendingDeleteCommonExpense && (
+        <DashboardModal
+          ariaLabel="Delete expense"
+          onClose={() => {
+            if (!deletingCommonExpenseId) {
+              setPendingDeleteCommonExpense(null);
+            }
+          }}
+        >
+          <DeleteExpenseConfirm
+            expense={pendingDeleteCommonExpense}
+            isDeleting={deletingCommonExpenseId === pendingDeleteCommonExpense.id}
+            error={commonExpenseDeleteError}
+            onCancel={() => setPendingDeleteCommonExpense(null)}
+            onConfirm={confirmDeleteCommonExpense}
           />
         </DashboardModal>
       )}
@@ -1659,12 +2077,14 @@ function OverviewFocus({
 function DateFilterBar({
   dateFrom,
   dateTo,
+  description = "Filters bookings by stay dates and accounts by entry date.",
   onDateFromChange,
   onDateToChange,
   onClear,
 }: {
   dateFrom: string;
   dateTo: string;
+  description?: string;
   onDateFromChange: (value: string) => void;
   onDateToChange: (value: string) => void;
   onClear: () => void;
@@ -1678,9 +2098,7 @@ function DateFilterBar({
           <h2 className="text-base font-semibold text-slate-950">
             Date filter
           </h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Filters bookings by stay dates and accounts by entry date.
-          </p>
+          <p className="mt-1 text-sm text-slate-500">{description}</p>
         </div>
         <div className="grid gap-3 sm:grid-cols-[minmax(260px,360px)_auto]">
           <DateRangeControl
@@ -2725,6 +3143,11 @@ function BookingEditFormPanel({
           </Field>
         </div>
 
+        <BookingLineItemsEditor
+          lineItems={form.lineItems}
+          onChange={(lineItems) => onChange({ ...form, lineItems })}
+        />
+
         <button
           type="submit"
           disabled={!canSubmit}
@@ -2863,6 +3286,72 @@ function DashboardModal({
   );
 }
 
+function DeleteExpenseConfirm({
+  expense,
+  isDeleting,
+  error,
+  onCancel,
+  onConfirm,
+}: {
+  expense: AccountEntry;
+  isDeleting: boolean;
+  error: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <section className="min-w-0 pr-10">
+      <div className="flex items-start gap-3">
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-red-50 text-red-700">
+          <Trash2 className="h-5 w-5" />
+        </div>
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold text-slate-950">
+            Delete expense
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            This removes the expense from history and updates account totals.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <p className="font-medium text-slate-950">{expense.label}</p>
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500">
+          <span>{expense.category}</span>
+          <span>{formatDate(expense.date)}</span>
+          <span className="font-semibold text-red-700">
+            -{inr.format(expense.amount)}
+          </span>
+        </div>
+      </div>
+
+      {error && <p className="mt-4 text-sm font-medium text-red-700">{error}</p>}
+
+      <div className="mt-6 grid gap-2 sm:grid-cols-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={isDeleting}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+        >
+          <X className="h-4 w-4" />
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={isDeleting}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-red-700 text-sm font-semibold text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-red-300"
+        >
+          <Trash2 className="h-4 w-4" />
+          {isDeleting ? "Deleting expense" : "Delete expense"}
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function QuickCustomerModal({
   form,
   isSaving,
@@ -2892,6 +3381,182 @@ function QuickCustomerModal({
           onSubmit={onSubmit}
           onCancel={onClose}
         />
+      </div>
+    </div>
+  );
+}
+
+function BookingLineItemsEditor({
+  lineItems,
+  onChange,
+}: {
+  lineItems: BookingLineItemForm[];
+  onChange: (lineItems: BookingLineItemForm[]) => void;
+}) {
+  const income = lineItems
+    .filter((item) => item.type === "income")
+    .reduce((total, item) => total + Number(item.amount || 0), 0);
+  const expense = lineItems
+    .filter((item) => item.type === "expense")
+    .reduce((total, item) => total + Number(item.amount || 0), 0);
+
+  function addLineItem() {
+    onChange([
+      ...lineItems,
+      {
+        type: "income",
+        category: "Decoration",
+        label: defaultBookingEntryLabel("Decoration"),
+        amount: 0,
+        isCleared: false,
+      },
+    ]);
+  }
+
+  function updateLineItem(index: number, nextItem: BookingLineItemForm) {
+    onChange(
+      lineItems.map((item, itemIndex) =>
+        itemIndex === index ? nextItem : item,
+      ),
+    );
+  }
+
+  function removeLineItem(index: number) {
+    onChange(lineItems.filter((_item, itemIndex) => itemIndex !== index));
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-slate-950">
+            Booking income / expense
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Edit decoration, BBQ, camp fire, damage recovery, offers, and other booking items.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-md bg-teal-50 px-2 py-1 text-xs font-semibold text-teal-800">
+            +{inr.format(income)}
+          </span>
+          <span className="rounded-md bg-red-50 px-2 py-1 text-xs font-semibold text-red-800">
+            -{inr.format(expense)}
+          </span>
+          <button
+            type="button"
+            onClick={addLineItem}
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+          >
+            <Plus className="h-4 w-4" />
+            Add item
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-3 space-y-3">
+        {lineItems.length === 0 && (
+          <p className="rounded-md border border-dashed border-slate-200 bg-white p-3 text-sm text-slate-500">
+            No booking-level income or expense items yet.
+          </p>
+        )}
+        {lineItems.map((item, index) => (
+          <div
+            key={item.id ?? `new-line-item-${index}`}
+            className="grid min-w-0 gap-3 rounded-md border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-12"
+          >
+            <div className="min-w-0 lg:col-span-3">
+              <Field label="Type">
+                <select
+                  value={item.type}
+                  onChange={(event) =>
+                    updateLineItem(index, {
+                      ...item,
+                      type: event.target.value as BookingLineItemForm["type"],
+                    })
+                  }
+                  className="field-control"
+                >
+                  <option value="income">Income</option>
+                  <option value="expense">Expense</option>
+                </select>
+              </Field>
+            </div>
+            <div className="min-w-0 lg:col-span-4">
+              <Field label="Category">
+                <select
+                  value={item.category}
+                  onChange={(event) =>
+                    updateLineItem(index, {
+                      ...item,
+                      category: event.target.value,
+                      label: defaultBookingEntryLabel(event.target.value),
+                    })
+                  }
+                  className="field-control"
+                >
+                  {bookingEntryCategories.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+            <div className="min-w-0 sm:col-span-2 lg:col-span-5">
+              <Field label="Label">
+                <input
+                  value={item.label}
+                  onChange={(event) =>
+                    updateLineItem(index, {
+                      ...item,
+                      label: event.target.value,
+                    })
+                  }
+                  className="field-control"
+                />
+              </Field>
+            </div>
+            <div className="min-w-0 lg:col-span-4">
+              <Field label="Amount">
+                <input
+                  type="number"
+                  min="0"
+                  value={item.amount}
+                  onChange={(event) =>
+                    updateLineItem(index, {
+                      ...item,
+                      amount: Number(event.target.value),
+                    })
+                  }
+                  className="field-control"
+                />
+              </Field>
+            </div>
+            <label className="flex h-10 min-w-0 items-center gap-2 self-end rounded-md border border-slate-200 px-3 text-sm font-medium text-slate-700 lg:col-span-4">
+              <input
+                type="checkbox"
+                checked={item.isCleared}
+                onChange={(event) =>
+                  updateLineItem(index, {
+                    ...item,
+                    isCleared: event.target.checked,
+                  })
+                }
+                className="h-4 w-4 rounded border-slate-300 text-teal-700"
+              />
+              Cleared
+            </label>
+            <button
+              type="button"
+              onClick={() => removeLineItem(index)}
+              className="inline-flex h-10 min-w-0 items-center justify-center gap-2 self-end rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 lg:col-span-4"
+            >
+              <X className="h-4 w-4" />
+              Remove
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -3135,7 +3800,7 @@ function HomestayCreateForm({
             Add Homestay
           </h2>
           <p className="mt-1 text-sm text-slate-500">
-            Create a property and an optional first active room.
+            Create a property and define its rooms or floors.
           </p>
         </div>
         <button
@@ -3180,19 +3845,6 @@ function HomestayCreateForm({
             disabled={disabled}
           />
         </Field>
-        <Field label="Units">
-          <input
-            type="number"
-            min="1"
-            value={form.units}
-            onChange={(event) =>
-              onChange({ ...form, units: Number(event.target.value) })
-            }
-            className="field-control"
-            required
-            disabled={disabled}
-          />
-        </Field>
         <Field label="Nightly rate">
           <input
             type="number"
@@ -3206,16 +3858,16 @@ function HomestayCreateForm({
             disabled={disabled}
           />
         </Field>
-        <Field label="First room">
-          <input
-            value={form.roomName}
-            onChange={(event) =>
-              onChange({ ...form, roomName: event.target.value })
-            }
-            className="field-control"
+        <div className="lg:col-span-3">
+          <RoomListEditor
+            rooms={form.rooms}
+            defaultRate={form.nightlyRate}
             disabled={disabled}
+            onChange={(rooms) =>
+              onChange({ ...form, rooms, units: rooms.length || 1 })
+            }
           />
-        </Field>
+        </div>
         <div className="lg:col-span-3">
           <button
             type="submit"
@@ -3255,14 +3907,18 @@ function HomestayEditFormPanel({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const canSubmit = Boolean(
-    form.homestayId && form.name && form.location && form.units > 0 && !isSaving,
+    form.homestayId &&
+      form.name &&
+      form.location &&
+      normalizeHomestayRoomForms(form.rooms, form.nightlyRate).length > 0 &&
+      !isSaving,
   );
 
   return (
     <section className="min-w-0 bg-white">
       <h2 className="text-base font-semibold text-slate-950">Edit Homestay</h2>
       <p className="mt-1 text-sm text-slate-500">
-        Update property details, manager, units, status, and nightly rate.
+        Update property details, manager, status, rate, and rooms.
       </p>
 
       <form className="mt-5 grid gap-4 sm:grid-cols-2" onSubmit={onSubmit}>
@@ -3313,19 +3969,6 @@ function HomestayEditFormPanel({
             <option value="paused">Paused</option>
           </select>
         </Field>
-        <Field label="Units">
-          <input
-            type="number"
-            min="1"
-            value={form.units}
-            onChange={(event) =>
-              onChange({ ...form, units: Number(event.target.value) })
-            }
-            className="field-control"
-            required
-            disabled={disabled}
-          />
-        </Field>
         <Field label="Nightly rate">
           <input
             type="number"
@@ -3339,6 +3982,16 @@ function HomestayEditFormPanel({
             disabled={disabled}
           />
         </Field>
+        <div className="sm:col-span-2">
+          <RoomListEditor
+            rooms={form.rooms}
+            defaultRate={form.nightlyRate}
+            disabled={disabled}
+            onChange={(rooms) =>
+              onChange({ ...form, rooms, units: rooms.length || 1 })
+            }
+          />
+        </div>
         <div className="sm:col-span-2">
           <button
             type="submit"
@@ -3359,6 +4012,116 @@ function HomestayEditFormPanel({
         </div>
       </form>
     </section>
+  );
+}
+
+function RoomListEditor({
+  rooms,
+  defaultRate,
+  disabled,
+  onChange,
+}: {
+  rooms: HomestayRoomForm[];
+  defaultRate: number;
+  disabled: boolean;
+  onChange: (rooms: HomestayRoomForm[]) => void;
+}) {
+  function updateRoom(index: number, nextRoom: HomestayRoomForm) {
+    onChange(rooms.map((room, roomIndex) => (roomIndex === index ? nextRoom : room)));
+  }
+
+  function addRoom() {
+    onChange([...rooms, createBlankRoomForm(defaultRate)]);
+  }
+
+  function removeRoom(index: number) {
+    const nextRooms = rooms.filter((_room, roomIndex) => roomIndex !== index);
+
+    onChange(nextRooms.length > 0 ? nextRooms : [createBlankRoomForm(defaultRate)]);
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-slate-950">Rooms</p>
+          <p className="mt-1 text-xs text-slate-500">
+            Add bookable room/floor names such as Ground floor, Top floor, or Room 1.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={addRoom}
+          disabled={disabled}
+          className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+        >
+          <Plus className="h-4 w-4" />
+          Add room
+        </button>
+      </div>
+      <div className="mt-3 space-y-3">
+        {rooms.map((room, index) => (
+          <div
+            key={room.id ?? `new-room-${index}`}
+            className="grid gap-3 rounded-md border border-slate-200 bg-white p-3 lg:grid-cols-[minmax(0,1fr)_120px_150px_auto]"
+          >
+            <Field label="Room / floor name">
+              <input
+                value={room.name}
+                placeholder="Ground floor"
+                onChange={(event) =>
+                  updateRoom(index, { ...room, name: event.target.value })
+                }
+                className="field-control"
+                required
+                disabled={disabled}
+              />
+            </Field>
+            <Field label="Capacity">
+              <input
+                type="number"
+                min="1"
+                value={room.capacity}
+                onChange={(event) =>
+                  updateRoom(index, {
+                    ...room,
+                    capacity: Number(event.target.value),
+                  })
+                }
+                className="field-control"
+                required
+                disabled={disabled}
+              />
+            </Field>
+            <Field label="Rate">
+              <input
+                type="number"
+                min="0"
+                value={room.nightlyRate}
+                onChange={(event) =>
+                  updateRoom(index, {
+                    ...room,
+                    nightlyRate: Number(event.target.value),
+                  })
+                }
+                className="field-control"
+                required
+                disabled={disabled}
+              />
+            </Field>
+            <button
+              type="button"
+              onClick={() => removeRoom(index)}
+              disabled={disabled || rooms.length === 1}
+              className="inline-flex h-10 items-center justify-center gap-2 self-end rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+            >
+              <X className="h-4 w-4" />
+              Remove
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -3586,11 +4349,13 @@ function CustomerEditFormPanel({
 function HomestayGrid({
   selectedHomestayId,
   homestays,
+  rooms,
   bookings,
   onEditHomestay,
 }: {
   selectedHomestayId: string;
   homestays: Homestay[];
+  rooms: Room[];
   bookings: Booking[];
   onEditHomestay: (homestay: Homestay) => void;
 }) {
@@ -3605,6 +4370,7 @@ function HomestayGrid({
         <HomestayCard
           key={homestay.id}
           homestay={homestay}
+          rooms={rooms.filter((room) => room.homestayId === homestay.id)}
           bookings={bookings}
           onEditHomestay={onEditHomestay}
         />
@@ -3615,13 +4381,16 @@ function HomestayGrid({
 
 function HomestayCard({
   homestay,
+  rooms,
   bookings,
   onEditHomestay,
 }: {
   homestay: Homestay;
+  rooms: Room[];
   bookings: Booking[];
   onEditHomestay: (homestay: Homestay) => void;
 }) {
+  const activeRooms = rooms.filter((room) => room.isActive);
   const homestayBookings = bookings.filter(
     (booking) => booking.homestayId === homestay.id,
   );
@@ -3664,10 +4433,35 @@ function HomestayCard({
       </div>
 
       <dl className="mt-5 grid grid-cols-3 gap-3">
-        <Stat label="Units" value={String(homestay.units)} />
+        <Stat label="Units" value={String(activeRooms.length || homestay.units)} />
         <Stat label="Rate" value={inr.format(homestay.nightlyRate)} />
         <Stat label="Revenue" value={inr.format(revenue)} />
       </dl>
+
+      <div className="mt-5 border-t border-slate-100 pt-4">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Rooms
+          </p>
+          <span className="text-xs text-slate-400">
+            {activeRooms.length || 0} active
+          </span>
+        </div>
+        {activeRooms.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {activeRooms.map((room) => (
+              <span
+                key={room.id}
+                className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700"
+              >
+                {room.name}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2 text-sm text-slate-500">No rooms configured.</p>
+        )}
+      </div>
 
       <div className="mt-5 border-t border-slate-100 pt-4 text-sm text-slate-600">
         Manager:{" "}
@@ -3926,6 +4720,324 @@ function CustomerTable({
           >
             Next
           </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CommonExpensesPanel({
+  form,
+  homestays,
+  expenses,
+  totalExpenses,
+  totalCount,
+  page,
+  pageSize,
+  isHistoryLoading,
+  historyError,
+  isSaving,
+  saveError,
+  deleteError,
+  disabled,
+  editingExpenseId,
+  deletingExpenseId,
+  onChange,
+  onSubmit,
+  onEdit,
+  onCancelEdit,
+  onDelete,
+  onPageChange,
+}: {
+  form: CommonExpenseForm;
+  homestays: Homestay[];
+  expenses: AccountEntry[];
+  totalExpenses: number;
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  isHistoryLoading: boolean;
+  historyError: string;
+  isSaving: boolean;
+  saveError: string;
+  deleteError: string;
+  disabled: boolean;
+  editingExpenseId: string;
+  deletingExpenseId: string;
+  onChange: (form: CommonExpenseForm) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onEdit: (expense: AccountEntry) => void;
+  onCancelEdit: () => void;
+  onDelete: (expense: AccountEntry) => void;
+  onPageChange: (page: number) => void;
+}) {
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const firstItem = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
+  const lastItem = Math.min(totalCount, page * pageSize);
+  const canSubmit = Boolean(
+    form.homestayId &&
+      form.category &&
+      form.label &&
+      form.entryDate &&
+      form.amount > 0 &&
+      !isSaving,
+  );
+
+  return (
+    <section className="grid min-w-0 gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <h2 className="text-base font-semibold text-slate-950">
+          Common expenses
+        </h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Record rent, maid salary, utilities, supplies, and recurring property costs.
+        </p>
+
+        <form className="mt-5 space-y-4" onSubmit={onSubmit}>
+          <Field label="Homestay">
+            <select
+              value={form.homestayId}
+              onChange={(event) =>
+                onChange({ ...form, homestayId: event.target.value })
+              }
+              className="field-control"
+              disabled={disabled || homestays.length === 0}
+              required
+            >
+              <option value="">Select homestay</option>
+              {homestays.map((homestay) => (
+                <option key={homestay.id} value={homestay.id}>
+                  {homestay.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Category">
+            <select
+              value={form.category}
+              onChange={(event) =>
+                onChange({
+                  ...form,
+                  category: event.target.value,
+                  label: defaultCommonExpenseLabel(event.target.value),
+                })
+              }
+              className="field-control"
+              disabled={disabled}
+            >
+              {commonExpenseCategories.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Label">
+            <input
+              value={form.label}
+              onChange={(event) =>
+                onChange({ ...form, label: event.target.value })
+              }
+              className="field-control"
+              required
+              disabled={disabled}
+            />
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Date">
+              <input
+                type="date"
+                value={form.entryDate}
+                onChange={(event) =>
+                  onChange({ ...form, entryDate: event.target.value })
+                }
+                className="field-control"
+                required
+                disabled={disabled}
+              />
+            </Field>
+            <Field label="Amount">
+              <input
+                type="number"
+                min="0"
+                value={form.amount}
+                onChange={(event) =>
+                  onChange({ ...form, amount: Number(event.target.value) })
+                }
+                className="field-control"
+                required
+                disabled={disabled}
+              />
+            </Field>
+          </div>
+          <label className="flex h-10 items-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-medium text-slate-700">
+            <input
+              type="checkbox"
+              checked={form.isCleared}
+              onChange={(event) =>
+                onChange({ ...form, isCleared: event.target.checked })
+              }
+              disabled={disabled}
+              className="h-4 w-4 rounded border-slate-300 text-teal-700"
+            />
+            Paid / cleared
+          </label>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="submit"
+              disabled={disabled || !canSubmit}
+              className={`inline-flex h-10 items-center justify-center gap-2 rounded-md text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:bg-slate-300 ${
+                editingExpenseId
+                  ? "bg-teal-700 hover:bg-teal-800"
+                  : "bg-slate-950 hover:bg-slate-800"
+              } ${editingExpenseId ? "" : "sm:col-span-2"}`}
+            >
+              {editingExpenseId ? (
+                <Pencil className="h-4 w-4" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              {isSaving
+                ? "Saving expense"
+                : editingExpenseId
+                  ? "Update expense"
+                  : "Add expense"}
+            </button>
+            {editingExpenseId && (
+              <button
+                type="button"
+                onClick={onCancelEdit}
+                disabled={disabled || isSaving}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+              >
+                <X className="h-4 w-4" />
+                Cancel
+              </button>
+            )}
+          </div>
+          {disabled && (
+            <p className="text-sm text-slate-500">
+              Sign in before adding common expenses.
+            </p>
+          )}
+          {saveError && (
+            <p className="text-sm font-medium text-red-700">{saveError}</p>
+          )}
+          {deleteError && (
+            <p className="text-sm font-medium text-red-700">{deleteError}</p>
+          )}
+        </form>
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-3 border-b border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-slate-950">
+              Expense history
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">
+              These entries are included in Accounts expense totals.
+            </p>
+          </div>
+          <div className="rounded-md bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">
+            {inr.format(totalExpenses)}
+          </div>
+        </div>
+        <div className="divide-y divide-slate-100">
+          {historyError && (
+            <p className="p-4 text-sm font-medium text-red-700">
+              {historyError}
+            </p>
+          )}
+          {isHistoryLoading && (
+            <p className="p-4 text-sm text-slate-500">
+              Loading expense history.
+            </p>
+          )}
+          {!isHistoryLoading && !historyError && expenses.length === 0 && (
+            <EmptyState message="No common expenses found for the selected homestay." />
+          )}
+          {!isHistoryLoading && !historyError && expenses.map((expense) => {
+            const homestay = homestays.find(
+              (item) => item.id === expense.homestayId,
+            );
+
+            return (
+              <div
+                key={expense.id}
+                className={`grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_110px_120px_170px] md:items-center ${
+                  editingExpenseId === expense.id ? "bg-teal-50/60" : ""
+                }`}
+              >
+                <div>
+                  <p className="font-medium text-slate-950">
+                    {expense.label}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {homestay?.name ?? "Homestay"} - {expense.category}
+                  </p>
+                </div>
+                <span className="text-sm text-slate-500">
+                  {formatDate(expense.date)}
+                </span>
+                <span className="text-right text-sm font-semibold text-red-700">
+                  -{inr.format(expense.amount)}
+                </span>
+                <div className="flex flex-wrap justify-start gap-2 md:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => onEdit(expense)}
+                    disabled={disabled || isSaving}
+                    className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDelete(expense)}
+                    disabled={
+                      disabled ||
+                      isSaving ||
+                      deletingExpenseId === expense.id
+                    }
+                    className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-red-100 bg-white px-3 text-sm font-semibold text-red-700 transition hover:border-red-200 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-red-300"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    {deletingExpenseId === expense.id ? "Deleting" : "Delete"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex flex-col gap-3 border-t border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-slate-500">
+            {totalCount === 0
+              ? "No expenses"
+              : `Showing ${firstItem}-${lastItem} of ${totalCount}`}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onPageChange(Math.max(1, page - 1))}
+              disabled={page <= 1 || isHistoryLoading}
+              className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+            >
+              Previous
+            </button>
+            <span className="min-w-20 text-center text-sm font-semibold text-slate-700">
+              {page} / {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+              disabled={page >= totalPages || isHistoryLoading}
+              className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
     </section>
@@ -4317,6 +5429,24 @@ function defaultBookingEntryLabel(category: string) {
   return labels[category] ?? "Booking adjustment";
 }
 
+function defaultCommonExpenseLabel(category: string) {
+  const labels: Record<string, string> = {
+    "Monthly rent": "Monthly rent paid",
+    "Maid salary": "Maid salary paid",
+    Housekeeping: "Housekeeping expense",
+    Electricity: "Electricity bill paid",
+    Internet: "Internet bill paid",
+    Laundry: "Laundry expense",
+    Repairs: "Repair expense",
+    Maintenance: "Maintenance expense",
+    Supplies: "Supplies purchase",
+    "Staff food": "Staff food expense",
+    Other: "Common expense",
+  };
+
+  return labels[category] ?? "Common expense";
+}
+
 function ensureBookingFormDefaults(
   current: BookingForm,
   data: DashboardData,
@@ -4361,4 +5491,52 @@ function ensureBookingEntryFormDefaults(
     ...current,
     bookingId,
   };
+}
+
+function ensureCommonExpenseFormDefaults(
+  current: CommonExpenseForm,
+  data: DashboardData,
+): CommonExpenseForm {
+  const homestayId = data.homestays.some(
+    (homestay) => homestay.id === current.homestayId,
+  )
+    ? current.homestayId
+    : (data.homestays[0]?.id ?? "");
+
+  return {
+    ...current,
+    homestayId,
+    entryDate: current.entryDate || todayIso(),
+    label: current.label || defaultCommonExpenseLabel(current.category),
+  };
+}
+
+function createBlankRoomForm(defaultRate = 0): HomestayRoomForm {
+  return {
+    name: "",
+    capacity: 2,
+    nightlyRate: defaultRate,
+  };
+}
+
+function normalizeHomestayRoomForms(
+  rooms: HomestayRoomForm[],
+  defaultRate: number,
+) {
+  return rooms
+    .map((room) => {
+      const capacity = Number(room.capacity);
+      const nightlyRate = Number(room.nightlyRate);
+      const fallbackRate = Number(defaultRate);
+
+      return {
+        id: room.id,
+        name: room.name.trim(),
+        capacity: Number.isFinite(capacity) ? Math.max(1, capacity) : 1,
+        nightlyRate: Number.isFinite(nightlyRate)
+          ? Math.max(0, nightlyRate)
+          : Math.max(0, Number.isFinite(fallbackRate) ? fallbackRate : 0),
+      };
+    })
+    .filter((room) => room.name);
 }

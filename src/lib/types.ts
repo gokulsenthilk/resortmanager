@@ -6,6 +6,7 @@ export type ModuleKey =
   | "customers"
   | "bookings"
   | "calendar"
+  | "expenses"
   | "accounts";
 
 export type HomestayStatus = "active" | "maintenance" | "paused";
