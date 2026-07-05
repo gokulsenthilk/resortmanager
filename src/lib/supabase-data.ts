@@ -81,6 +81,13 @@ export type UpdateBookingInput = CreateBookingInput & {
   status: BookingStatus;
 };
 
+export type HomestayRoomInput = {
+  id?: string;
+  name: string;
+  capacity: number;
+  nightlyRate: number;
+};
+
 export type CreateHomestayInput = {
   ownerId: string;
   name: string;
@@ -88,7 +95,7 @@ export type CreateHomestayInput = {
   managerName: string;
   units: number;
   nightlyRate: number;
-  roomName: string;
+  rooms: HomestayRoomInput[];
 };
 
 export type UpdateHomestayInput = {
@@ -99,6 +106,7 @@ export type UpdateHomestayInput = {
   units: number;
   nightlyRate: number;
   status: HomestayStatus;
+  rooms: HomestayRoomInput[];
 };
 
 export type CreateCustomerInput = {
@@ -116,12 +124,39 @@ export type UpdateCustomerInput = Omit<CreateCustomerInput, "ownerId"> & {
 
 export type CreateAccountEntryInput = {
   homestayId: string;
-  bookingId: string;
+  bookingId?: string | null;
   type: "income" | "expense";
   category: string;
   label: string;
   amount: number;
   isCleared: boolean;
+  entryDate?: string;
+};
+
+export type UpdateAccountEntryInput = CreateAccountEntryInput & {
+  id: string;
+};
+
+export type UpsertBookingAccountEntryInput = {
+  id?: string;
+  type: "income" | "expense";
+  category: string;
+  label: string;
+  amount: number;
+  isCleared: boolean;
+};
+
+export type CommonExpenseHistoryInput = {
+  homestayId: string;
+  dateFrom: string;
+  dateTo: string;
+  page: number;
+  pageSize: number;
+};
+
+export type CommonExpenseHistoryResult = {
+  entries: AccountEntry[];
+  totalCount: number;
 };
 
 export async function fetchDashboardData(): Promise<DashboardData> {
@@ -172,6 +207,58 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   const accountEntries = ((accountsResult.data ?? []) as AccountEntryRow[]).map(mapAccountEntry);
 
   return { homestays, rooms, customers, bookings, accountEntries };
+}
+
+export async function fetchCommonExpenseHistory({
+  homestayId,
+  dateFrom,
+  dateTo,
+  page,
+  pageSize,
+}: CommonExpenseHistoryInput): Promise<CommonExpenseHistoryResult> {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  const safePage = Math.max(1, page);
+  const safePageSize = Math.max(1, pageSize);
+  const from = (safePage - 1) * safePageSize;
+  const to = from + safePageSize - 1;
+
+  let query = supabase
+    .from("account_entries")
+    .select(
+      "id,homestay_id,booking_id,label,entry_type,category,entry_date,amount,is_cleared",
+      { count: "exact" },
+    )
+    .eq("entry_type", "expense")
+    .is("booking_id", null)
+    .order("entry_date", { ascending: false })
+    .order("id", { ascending: false })
+    .range(from, to);
+
+  if (homestayId !== "all") {
+    query = query.eq("homestay_id", homestayId);
+  }
+
+  if (dateFrom) {
+    query = query.gte("entry_date", dateFrom);
+  }
+
+  if (dateTo) {
+    query = query.lte("entry_date", dateTo);
+  }
+
+  const { data, error, count } = await query;
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return {
+    entries: ((data ?? []) as AccountEntryRow[]).map(mapAccountEntry),
+    totalCount: count ?? 0,
+  };
 }
 
 export async function createBooking(input: CreateBookingInput): Promise<Booking> {
@@ -256,16 +343,18 @@ export async function createHomestay(input: CreateHomestayInput): Promise<void> 
     throw new Error(error.message);
   }
 
-  const roomName = input.roomName.trim();
-
-  if (roomName) {
-    const { error: roomError } = await supabase.from("rooms").insert({
+  const roomRows = input.rooms
+    .map((room) => ({
       homestay_id: (data as { id: string }).id,
-      name: roomName,
-      capacity: 2,
-      nightly_rate: input.nightlyRate,
+      name: room.name.trim(),
+      capacity: room.capacity,
+      nightly_rate: room.nightlyRate,
       is_active: true,
-    });
+    }))
+    .filter((room) => room.name);
+
+  if (roomRows.length > 0) {
+    const { error: roomError } = await supabase.from("rooms").insert(roomRows);
 
     if (roomError) {
       throw new Error(roomError.message);
@@ -294,6 +383,78 @@ export async function updateHomestay(input: UpdateHomestayInput): Promise<Homest
 
   if (error) {
     throw new Error(error.message);
+  }
+
+  const { data: existingRooms, error: roomsLoadError } = await supabase
+    .from("rooms")
+    .select("id")
+    .eq("homestay_id", input.id);
+
+  if (roomsLoadError) {
+    throw new Error(roomsLoadError.message);
+  }
+
+  const activeRooms = input.rooms
+    .map((room) => ({
+      id: room.id,
+      name: room.name.trim(),
+      capacity: room.capacity,
+      nightly_rate: room.nightlyRate,
+    }))
+    .filter((room) => room.name);
+  const activeRoomIds = activeRooms
+    .map((room) => room.id)
+    .filter((id): id is string => Boolean(id));
+  const inactiveRoomIds = ((existingRooms ?? []) as Array<{ id: string }>)
+    .map((room) => room.id)
+    .filter((roomId) => !activeRoomIds.includes(roomId));
+
+  if (inactiveRoomIds.length > 0) {
+    const { error: deactivateError } = await supabase
+      .from("rooms")
+      .update({ is_active: false })
+      .in("id", inactiveRoomIds)
+      .eq("homestay_id", input.id);
+
+    if (deactivateError) {
+      throw new Error(deactivateError.message);
+    }
+  }
+
+  const roomUpdates = activeRooms.filter((room) => room.id);
+  const roomInserts = activeRooms.filter((room) => !room.id);
+
+  for (const room of roomUpdates) {
+    const { error: roomUpdateError } = await supabase
+      .from("rooms")
+      .update({
+        name: room.name,
+        capacity: room.capacity,
+        nightly_rate: room.nightly_rate,
+        is_active: true,
+      })
+      .eq("id", room.id)
+      .eq("homestay_id", input.id);
+
+    if (roomUpdateError) {
+      throw new Error(roomUpdateError.message);
+    }
+  }
+
+  if (roomInserts.length > 0) {
+    const { error: roomInsertError } = await supabase.from("rooms").insert(
+      roomInserts.map((room) => ({
+        homestay_id: input.id,
+        name: room.name,
+        capacity: room.capacity,
+        nightly_rate: room.nightly_rate,
+        is_active: true,
+      })),
+    );
+
+    if (roomInsertError) {
+      throw new Error(roomInsertError.message);
+    }
   }
 
   return mapHomestay(data as HomestayRow);
@@ -356,16 +517,140 @@ export async function createAccountEntry(input: CreateAccountEntryInput): Promis
 
   const { error } = await supabase.from("account_entries").insert({
     homestay_id: input.homestayId,
-    booking_id: input.bookingId,
+    booking_id: input.bookingId || null,
     entry_type: input.type,
     category: input.category,
     label: input.label,
     amount: input.amount,
     is_cleared: input.isCleared,
+    ...(input.entryDate ? { entry_date: input.entryDate } : {}),
   });
 
   if (error) {
     throw new Error(error.message);
+  }
+}
+
+export async function updateAccountEntry(input: UpdateAccountEntryInput): Promise<void> {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  const { error } = await supabase
+    .from("account_entries")
+    .update({
+      homestay_id: input.homestayId,
+      booking_id: input.bookingId || null,
+      entry_type: input.type,
+      category: input.category,
+      label: input.label,
+      amount: input.amount,
+      is_cleared: input.isCleared,
+      ...(input.entryDate ? { entry_date: input.entryDate } : {}),
+    })
+    .eq("id", input.id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function deleteAccountEntry(id: string): Promise<void> {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  const { error } = await supabase.from("account_entries").delete().eq("id", id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function syncBookingAccountEntries(
+  bookingId: string,
+  homestayId: string,
+  entries: UpsertBookingAccountEntryInput[],
+): Promise<void> {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  const { data: existingRows, error: loadError } = await supabase
+    .from("account_entries")
+    .select("id")
+    .eq("booking_id", bookingId);
+
+  if (loadError) {
+    throw new Error(loadError.message);
+  }
+
+  const normalizedEntries = entries
+    .map((entry) => ({
+      id: entry.id,
+      entry_type: entry.type,
+      category: entry.category,
+      label: entry.label.trim(),
+      amount: entry.amount,
+      is_cleared: entry.isCleared,
+    }))
+    .filter((entry) => entry.label && entry.amount > 0);
+  const submittedExistingIds = normalizedEntries
+    .map((entry) => entry.id)
+    .filter((id): id is string => Boolean(id));
+  const deletedEntryIds = ((existingRows ?? []) as Array<{ id: string }>)
+    .map((entry) => entry.id)
+    .filter((entryId) => !submittedExistingIds.includes(entryId));
+
+  if (deletedEntryIds.length > 0) {
+    const { error: deleteError } = await supabase
+      .from("account_entries")
+      .delete()
+      .in("id", deletedEntryIds)
+      .eq("booking_id", bookingId);
+
+    if (deleteError) {
+      throw new Error(deleteError.message);
+    }
+  }
+
+  for (const entry of normalizedEntries.filter((item) => item.id)) {
+    const { error: updateError } = await supabase
+      .from("account_entries")
+      .update({
+        homestay_id: homestayId,
+        entry_type: entry.entry_type,
+        category: entry.category,
+        label: entry.label,
+        amount: entry.amount,
+        is_cleared: entry.is_cleared,
+      })
+      .eq("id", entry.id)
+      .eq("booking_id", bookingId);
+
+    if (updateError) {
+      throw new Error(updateError.message);
+    }
+  }
+
+  const newEntries = normalizedEntries.filter((entry) => !entry.id);
+
+  if (newEntries.length > 0) {
+    const { error: insertError } = await supabase.from("account_entries").insert(
+      newEntries.map((entry) => ({
+        homestay_id: homestayId,
+        booking_id: bookingId,
+        entry_type: entry.entry_type,
+        category: entry.category,
+        label: entry.label,
+        amount: entry.amount,
+        is_cleared: entry.is_cleared,
+      })),
+    );
+
+    if (insertError) {
+      throw new Error(insertError.message);
+    }
   }
 }
 
