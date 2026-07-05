@@ -944,7 +944,7 @@ export function ResortDashboard({
               className="absolute inset-0 bg-slate-950/50"
               onClick={() => setIsMobileNavOpen(false)}
             />
-            <aside className="relative flex h-full w-80 max-w-[86vw] flex-col bg-slate-950 px-4 py-5 text-white shadow-2xl">
+            <aside className="relative flex h-full w-80 max-w-[86vw] flex-col overflow-y-auto overscroll-contain bg-slate-950 px-4 py-5 text-white shadow-2xl">
               <div className="mb-6 flex items-center justify-between gap-3 px-2">
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-teal-400 text-slate-950">
@@ -1032,7 +1032,7 @@ export function ResortDashboard({
           </div>
         )}
 
-        <aside className="hidden w-72 shrink-0 border-r border-slate-200 bg-slate-950 px-4 py-5 text-white lg:block">
+        <aside className="fixed inset-y-0 left-0 z-30 hidden h-dvh w-72 overflow-y-auto overscroll-contain border-r border-slate-200 bg-slate-950 px-4 py-5 text-white lg:block">
           <div className="mb-8 flex items-center gap-3 px-2">
             <div className="grid h-10 w-10 place-items-center rounded-lg bg-teal-400 text-slate-950">
               <BedDouble className="h-5 w-5" />
@@ -1073,7 +1073,7 @@ export function ResortDashboard({
           />
         </aside>
 
-        <main className="flex min-w-0 flex-1 flex-col bg-slate-50">
+        <main className="flex min-w-0 flex-1 flex-col bg-slate-50 lg:ml-72">
           <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur md:px-6">
             <div className="mb-4 flex items-center justify-between gap-3 lg:hidden">
               <button
@@ -1670,13 +1670,6 @@ function DateFilterBar({
   onClear: () => void;
 }) {
   const hasFilter = Boolean(dateFrom || dateTo);
-  const [isRangeOpen, setIsRangeOpen] = useState(false);
-
-  function setRange(from: string, to: string) {
-    onDateFromChange(from);
-    onDateToChange(to);
-    setIsRangeOpen(false);
-  }
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -1690,106 +1683,17 @@ function DateFilterBar({
           </p>
         </div>
         <div className="grid gap-3 sm:grid-cols-[minmax(260px,360px)_auto]">
-          <div className="relative">
-            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Date range
-            </span>
-            <button
-              type="button"
-              onClick={() => setIsRangeOpen((current) => !current)}
-              aria-expanded={isRangeOpen}
-              className="inline-flex h-10 w-full items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 text-left text-sm font-semibold text-slate-800 transition hover:border-teal-300"
-            >
-              <span className="inline-flex min-w-0 items-center gap-2">
-                <CalendarDays className="h-4 w-4 shrink-0 text-teal-700" />
-                <span className="truncate">
-                  {formatDateRangeLabel(dateFrom, dateTo)}
-                </span>
-              </span>
-              <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />
-            </button>
-            {isRangeOpen && (
-              <div className="absolute right-0 z-30 mt-2 w-full rounded-lg border border-slate-200 bg-white p-3 shadow-lg sm:w-[360px]">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="Start date">
-                    <input
-                      type="date"
-                      value={dateFrom}
-                      max={dateTo || undefined}
-                      onChange={(event) => {
-                        const nextFrom = event.target.value;
-
-                        onDateFromChange(nextFrom);
-
-                        if (dateTo && nextFrom && nextFrom > dateTo) {
-                          onDateToChange(nextFrom);
-                        }
-                      }}
-                      className="field-control"
-                    />
-                  </Field>
-                  <Field label="End date">
-                    <input
-                      type="date"
-                      value={dateTo}
-                      min={dateFrom || undefined}
-                      onChange={(event) => {
-                        const nextTo = event.target.value;
-
-                        onDateToChange(nextTo);
-
-                        if (dateFrom && nextTo && nextTo < dateFrom) {
-                          onDateFromChange(nextTo);
-                        }
-                      }}
-                      className="field-control"
-                    />
-                  </Field>
-                </div>
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setRange(todayIso(), todayIso())}
-                    className="rounded-md border border-slate-200 px-2 py-2 text-xs font-semibold text-slate-700 transition hover:border-teal-300 hover:text-teal-800"
-                  >
-                    Today
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setRange(todayIso(), addDaysIso(new Date(), 6))
-                    }
-                    className="rounded-md border border-slate-200 px-2 py-2 text-xs font-semibold text-slate-700 transition hover:border-teal-300 hover:text-teal-800"
-                  >
-                    Next 7 days
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setRange(startOfMonthIso(new Date()), endOfMonthIso(new Date()))
-                    }
-                    className="rounded-md border border-slate-200 px-2 py-2 text-xs font-semibold text-slate-700 transition hover:border-teal-300 hover:text-teal-800"
-                  >
-                    This month
-                  </button>
-                </div>
-                <div className="mt-3 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setIsRangeOpen(false)}
-                    className="rounded-md bg-teal-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-teal-800"
-                  >
-                    Done
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+          <DateRangeControl
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            label="Date range"
+            onDateFromChange={onDateFromChange}
+            onDateToChange={onDateToChange}
+          />
           <button
             type="button"
             onClick={() => {
               onClear();
-              setIsRangeOpen(false);
             }}
             disabled={!hasFilter}
             className="inline-flex h-10 items-center justify-center gap-2 self-end rounded-md border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
@@ -1800,6 +1704,124 @@ function DateFilterBar({
         </div>
       </div>
     </section>
+  );
+}
+
+function DateRangeControl({
+  dateFrom,
+  dateTo,
+  label,
+  onDateFromChange,
+  onDateToChange,
+}: {
+  dateFrom: string;
+  dateTo: string;
+  label: string;
+  onDateFromChange: (value: string) => void;
+  onDateToChange: (value: string) => void;
+}) {
+  const [isRangeOpen, setIsRangeOpen] = useState(false);
+
+  function setRange(from: string, to: string) {
+    onDateFromChange(from);
+    onDateToChange(to);
+    setIsRangeOpen(false);
+  }
+
+  return (
+    <div className="relative min-w-0">
+      <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </span>
+      <button
+        type="button"
+        onClick={() => setIsRangeOpen((current) => !current)}
+        aria-expanded={isRangeOpen}
+        className="inline-flex h-10 w-full items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 text-left text-sm font-semibold text-slate-800 transition hover:border-teal-300"
+      >
+        <span className="inline-flex min-w-0 items-center gap-2">
+          <CalendarDays className="h-4 w-4 shrink-0 text-teal-700" />
+          <span className="truncate">
+            {formatDateRangeLabel(dateFrom, dateTo)}
+          </span>
+        </span>
+        <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />
+      </button>
+      {isRangeOpen && (
+        <div className="absolute right-0 z-30 mt-2 w-full rounded-lg border border-slate-200 bg-white p-3 shadow-lg sm:w-[360px]">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Start date">
+              <input
+                type="date"
+                value={dateFrom}
+                max={dateTo || undefined}
+                onChange={(event) => {
+                  const nextFrom = event.target.value;
+
+                  onDateFromChange(nextFrom);
+
+                  if (dateTo && nextFrom && nextFrom > dateTo) {
+                    onDateToChange(nextFrom);
+                  }
+                }}
+                className="field-control"
+              />
+            </Field>
+            <Field label="End date">
+              <input
+                type="date"
+                value={dateTo}
+                min={dateFrom || undefined}
+                onChange={(event) => {
+                  const nextTo = event.target.value;
+
+                  onDateToChange(nextTo);
+
+                  if (dateFrom && nextTo && nextTo < dateFrom) {
+                    onDateFromChange(nextTo);
+                  }
+                }}
+                className="field-control"
+              />
+            </Field>
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => setRange(todayIso(), todayIso())}
+              className="rounded-md border border-slate-200 px-2 py-2 text-xs font-semibold text-slate-700 transition hover:border-teal-300 hover:text-teal-800"
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              onClick={() => setRange(todayIso(), addDaysIso(new Date(), 6))}
+              className="rounded-md border border-slate-200 px-2 py-2 text-xs font-semibold text-slate-700 transition hover:border-teal-300 hover:text-teal-800"
+            >
+              Next 7 days
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setRange(startOfMonthIso(new Date()), endOfMonthIso(new Date()))
+              }
+              className="rounded-md border border-slate-200 px-2 py-2 text-xs font-semibold text-slate-700 transition hover:border-teal-300 hover:text-teal-800"
+            >
+              This month
+            </button>
+          </div>
+          <div className="mt-3 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setIsRangeOpen(false)}
+              className="rounded-md bg-teal-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-teal-800"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -2033,6 +2055,54 @@ function BookingTable({
   accountEntries: AccountEntry[];
   onEditBooking: (booking: Booking) => void;
 }) {
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<BookingStatus | "all">(
+    "all",
+  );
+  const [channelFilter, setChannelFilter] = useState<Booking["channel"] | "all">(
+    "all",
+  );
+  const [bookingDateFrom, setBookingDateFrom] = useState("");
+  const [bookingDateTo, setBookingDateTo] = useState("");
+  const channelOptions = useMemo(() => {
+    return Array.from(
+      new Set(visibleBookings.map((booking) => booking.channel)),
+    ).sort();
+  }, [visibleBookings]);
+  const filteredBookings = useMemo(() => {
+    return visibleBookings.filter((booking) => {
+      const matchesStatus =
+        statusFilter === "all" || booking.status === statusFilter;
+      const matchesChannel =
+        channelFilter === "all" || booking.channel === channelFilter;
+      const matchesDate = doesStayOverlapRange(
+        booking.checkIn,
+        booking.checkOut,
+        bookingDateFrom,
+        bookingDateTo,
+      );
+
+      return matchesStatus && matchesChannel && matchesDate;
+    });
+  }, [
+    bookingDateFrom,
+    bookingDateTo,
+    channelFilter,
+    statusFilter,
+    visibleBookings,
+  ]);
+  const hasBookingFilter =
+    statusFilter !== "all" ||
+    channelFilter !== "all" ||
+    Boolean(bookingDateFrom || bookingDateTo);
+
+  function clearBookingFilters() {
+    setStatusFilter("all");
+    setChannelFilter("all");
+    setBookingDateFrom("");
+    setBookingDateTo("");
+  }
+
   return (
     <section className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-col gap-3 border-b border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -2046,19 +2116,83 @@ function BookingTable({
         </div>
         <button
           type="button"
-          className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-medium text-slate-700 transition hover:border-slate-300"
+          onClick={() => setIsFilterOpen((current) => !current)}
+          className={`inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium transition ${
+            hasBookingFilter
+              ? "border-teal-200 bg-teal-50 text-teal-800"
+              : "border-slate-200 text-slate-700 hover:border-slate-300"
+          }`}
         >
           <Filter className="h-4 w-4" />
-          Filter
+          {hasBookingFilter ? `Filter (${filteredBookings.length})` : "Filter"}
         </button>
       </div>
+
+      {isFilterOpen && (
+        <div className="grid gap-3 border-b border-slate-200 bg-slate-50 p-4 md:grid-cols-[180px_180px_minmax(260px,360px)_minmax(0,1fr)_auto] md:items-end">
+          <Field label="Status">
+            <select
+              value={statusFilter}
+              onChange={(event) =>
+                setStatusFilter(event.target.value as BookingStatus | "all")
+              }
+              className="field-control"
+            >
+              <option value="all">All statuses</option>
+              {(Object.keys(statusLabels) as BookingStatus[]).map((status) => (
+                <option key={status} value={status}>
+                  {statusLabels[status]}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Channel">
+            <select
+              value={channelFilter}
+              onChange={(event) =>
+                setChannelFilter(event.target.value as Booking["channel"] | "all")
+              }
+              className="field-control"
+            >
+              <option value="all">All channels</option>
+              {channelOptions.map((channel) => (
+                <option key={channel} value={channel}>
+                  {channel}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <DateRangeControl
+            dateFrom={bookingDateFrom}
+            dateTo={bookingDateTo}
+            label="Stay date range"
+            onDateFromChange={setBookingDateFrom}
+            onDateToChange={setBookingDateTo}
+          />
+          <p className="text-sm text-slate-500">
+            Showing {filteredBookings.length} of {visibleBookings.length} bookings.
+          </p>
+          <button
+            type="button"
+            onClick={clearBookingFilters}
+            disabled={!hasBookingFilter}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+          >
+            <X className="h-4 w-4" />
+            Clear
+          </button>
+        </div>
+      )}
 
       {visibleBookings.length === 0 && (
         <EmptyState message="No bookings matched the current homestay and search filters." />
       )}
+      {visibleBookings.length > 0 && filteredBookings.length === 0 && (
+        <EmptyState message="No bookings matched the selected booking filters." />
+      )}
 
       <div className="divide-y divide-slate-100 md:hidden">
-        {visibleBookings.map((booking) => {
+        {filteredBookings.map((booking) => {
           const customer = customers.find(
             (item) => item.id === booking.customerId,
           );
@@ -2072,9 +2206,14 @@ function BookingTable({
             <article key={booking.id} className="space-y-3 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-semibold text-slate-950">{booking.id}</p>
+                  <p className="flex flex-wrap items-center gap-2 font-semibold text-slate-950">
+                    <span>{customer?.name ?? "Guest"}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                      {booking.channel}
+                    </span>
+                  </p>
                   <p className="mt-1 text-sm text-slate-500">
-                    {customer?.name}
+                    {homestay?.name}
                   </p>
                 </div>
                 <span
@@ -2094,7 +2233,7 @@ function BookingTable({
               </div>
               <div className="flex items-end justify-between gap-3">
                 <p className="text-xs text-slate-500">
-                  {booking.channel} - {booking.guests} guests
+                  {booking.guests} guests
                 </p>
                 <div className="text-right">
                   <p className="font-semibold text-slate-950">
@@ -2126,7 +2265,6 @@ function BookingTable({
         <table className="min-w-full text-left text-sm">
           <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>
-              <th className="px-4 py-3 font-semibold">Booking</th>
               <th className="px-4 py-3 font-semibold">Guest</th>
               <th className="px-4 py-3 font-semibold">Stay</th>
               <th className="px-4 py-3 font-semibold">Status</th>
@@ -2135,7 +2273,7 @@ function BookingTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {visibleBookings.map((booking) => {
+            {filteredBookings.map((booking) => {
               const customer = customers.find(
                 (item) => item.id === booking.customerId,
               );
@@ -2151,14 +2289,11 @@ function BookingTable({
               return (
                 <tr key={booking.id} className="hover:bg-slate-50">
                   <td className="px-4 py-4">
-                    <p className="font-semibold text-slate-950">{booking.id}</p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {booking.channel}
-                    </p>
-                  </td>
-                  <td className="px-4 py-4">
-                    <p className="font-medium text-slate-900">
-                      {customer?.name}
+                    <p className="flex flex-wrap items-center gap-2 font-medium text-slate-900">
+                      <span>{customer?.name ?? "Guest"}</span>
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                        {booking.channel}
+                      </span>
                     </p>
                     <p className="mt-1 text-xs text-slate-500">
                       {homestay?.name}
