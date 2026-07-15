@@ -8,6 +8,8 @@ import type {
   Homestay,
   HomestayStatus,
   Room,
+  StaffMember,
+  StaffSalaryPayment,
 } from "./types";
 
 type HomestayRow = {
@@ -62,6 +64,27 @@ type AccountEntryRow = {
   entry_date: string;
   amount: string | number;
   is_cleared: boolean;
+};
+
+type StaffMemberRow = {
+  id: string;
+  full_name: string;
+  mobile_number: string;
+  aadhar_number: string | null;
+  pan_number: string | null;
+  emergency_contact: string | null;
+  monthly_salary: string | number;
+  employee_type: string;
+  is_active: boolean;
+};
+
+type StaffSalaryPaymentRow = {
+  id: string;
+  staff_id: string;
+  salary_month: string;
+  amount: string | number;
+  days_worked: number;
+  paid_on: string;
 };
 
 export type CreateBookingInput = {
@@ -122,6 +145,30 @@ export type UpdateCustomerInput = Omit<CreateCustomerInput, "ownerId"> & {
   id: string;
 };
 
+export type CreateStaffInput = {
+  ownerId: string;
+  name: string;
+  mobileNumber: string;
+  aadharNumber: string;
+  panNumber: string;
+  emergencyContact: string;
+  monthlySalary: number;
+  employeeType: string;
+};
+
+export type UpdateStaffInput = Omit<CreateStaffInput, "ownerId"> & {
+  id: string;
+  isActive: boolean;
+};
+
+export type StaffSalaryPaymentInput = {
+  staffId: string;
+  salaryMonth: string;
+  amount: number;
+  daysWorked: number;
+  paidOn: string;
+};
+
 export type CreateAccountEntryInput = {
   homestayId: string;
   bookingId?: string | null;
@@ -164,7 +211,15 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     throw new Error("Supabase environment variables are not configured.");
   }
 
-  const [homestaysResult, customersResult, roomsResult, bookingsResult, accountsResult] = await Promise.all([
+  const [
+    homestaysResult,
+    customersResult,
+    roomsResult,
+    bookingsResult,
+    accountsResult,
+    staffResult,
+    staffSalaryPaymentsResult,
+  ] = await Promise.all([
     supabase
       .from("homestays")
       .select("id,name,location,manager_name,units,nightly_rate,status")
@@ -186,6 +241,14 @@ export async function fetchDashboardData(): Promise<DashboardData> {
       .from("account_entries")
       .select("id,homestay_id,booking_id,label,entry_type,category,entry_date,amount,is_cleared")
       .order("entry_date", { ascending: false }),
+    supabase
+      .from("staff_members")
+      .select("id,full_name,mobile_number,aadhar_number,pan_number,emergency_contact,monthly_salary,employee_type,is_active")
+      .order("full_name", { ascending: true }),
+    supabase
+      .from("staff_salary_payments")
+      .select("id,staff_id,salary_month,amount,days_worked,paid_on")
+      .order("salary_month", { ascending: false }),
   ]);
 
   const firstError =
@@ -205,8 +268,22 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   const bookings = rawBookings.map((row) => mapBooking(row, rooms));
   const customers = ((customersResult.data ?? []) as CustomerRow[]).map((row) => mapCustomer(row, rawBookings));
   const accountEntries = ((accountsResult.data ?? []) as AccountEntryRow[]).map(mapAccountEntry);
+  const staffMembers = staffResult.error
+    ? []
+    : ((staffResult.data ?? []) as StaffMemberRow[]).map(mapStaffMember);
+  const staffSalaryPayments = staffSalaryPaymentsResult.error
+    ? []
+    : ((staffSalaryPaymentsResult.data ?? []) as StaffSalaryPaymentRow[]).map(mapStaffSalaryPayment);
 
-  return { homestays, rooms, customers, bookings, accountEntries };
+  return {
+    homestays,
+    rooms,
+    customers,
+    staffMembers,
+    staffSalaryPayments,
+    bookings,
+    accountEntries,
+  };
 }
 
 export async function fetchCommonExpenseHistory({
@@ -510,6 +587,94 @@ export async function updateCustomer(input: UpdateCustomerInput): Promise<Custom
   return mapCustomer(data as CustomerRow, []);
 }
 
+export async function createStaff(input: CreateStaffInput): Promise<void> {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  const { error } = await supabase.from("staff_members").insert({
+    owner_id: input.ownerId,
+    full_name: input.name,
+    mobile_number: input.mobileNumber,
+    aadhar_number: input.aadharNumber || null,
+    pan_number: input.panNumber || null,
+    emergency_contact: input.emergencyContact || null,
+    monthly_salary: input.monthlySalary,
+    employee_type: input.employeeType,
+    is_active: true,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function updateStaff(input: UpdateStaffInput): Promise<void> {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  const { error } = await supabase
+    .from("staff_members")
+    .update({
+      full_name: input.name,
+      mobile_number: input.mobileNumber,
+      aadhar_number: input.aadharNumber || null,
+      pan_number: input.panNumber || null,
+      emergency_contact: input.emergencyContact || null,
+      monthly_salary: input.monthlySalary,
+      employee_type: input.employeeType,
+      is_active: input.isActive,
+    })
+    .eq("id", input.id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function markStaffSalaryPaid(
+  input: StaffSalaryPaymentInput,
+): Promise<void> {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  const { error } = await supabase.from("staff_salary_payments").upsert(
+    {
+      staff_id: input.staffId,
+      salary_month: input.salaryMonth,
+      amount: input.amount,
+      days_worked: input.daysWorked,
+      paid_on: input.paidOn,
+    },
+    { onConflict: "staff_id,salary_month" },
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function markStaffSalaryUnpaid(
+  staffId: string,
+  salaryMonth: string,
+): Promise<void> {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  const { error } = await supabase
+    .from("staff_salary_payments")
+    .delete()
+    .eq("staff_id", staffId)
+    .eq("salary_month", salaryMonth);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
 export async function createAccountEntry(input: CreateAccountEntryInput): Promise<void> {
   if (!supabase) {
     throw new Error("Supabase environment variables are not configured.");
@@ -724,6 +889,33 @@ function mapAccountEntry(row: AccountEntryRow): AccountEntry {
     date: row.entry_date,
     amount: Number(row.amount),
     status: row.is_cleared ? "cleared" : "pending",
+  };
+}
+
+function mapStaffMember(row: StaffMemberRow): StaffMember {
+  return {
+    id: row.id,
+    name: row.full_name,
+    mobileNumber: row.mobile_number,
+    aadharNumber: row.aadhar_number ?? "",
+    panNumber: row.pan_number ?? "",
+    emergencyContact: row.emergency_contact ?? "",
+    monthlySalary: Number(row.monthly_salary),
+    employeeType: row.employee_type,
+    isActive: row.is_active,
+  };
+}
+
+function mapStaffSalaryPayment(
+  row: StaffSalaryPaymentRow,
+): StaffSalaryPayment {
+  return {
+    id: row.id,
+    staffId: row.staff_id,
+    salaryMonth: row.salary_month,
+    amount: Number(row.amount),
+    daysWorked: row.days_worked,
+    paidOn: row.paid_on,
   };
 }
 

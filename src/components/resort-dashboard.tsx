@@ -14,6 +14,7 @@ import {
   Clock3,
   Filter,
   Home,
+  IdCard,
   LogOut,
   MapPin,
   Menu,
@@ -35,14 +36,18 @@ import {
   createBooking,
   createCustomer,
   createHomestay,
+  createStaff,
   deleteAccountEntry,
   fetchCommonExpenseHistory,
   fetchDashboardData,
+  markStaffSalaryPaid,
+  markStaffSalaryUnpaid,
   syncBookingAccountEntries,
   updateAccountEntry,
   updateBooking,
   updateCustomer,
   updateHomestay,
+  updateStaff,
 } from "@/lib/supabase-data";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import type {
@@ -54,6 +59,7 @@ import type {
   ModuleKey,
   NavItem,
   Room,
+  StaffMember,
 } from "@/lib/types";
 
 const navItems: NavItem[] = [
@@ -65,6 +71,7 @@ const navItems: NavItem[] = [
     href: "/customers",
     icon: UsersRound,
   },
+  { key: "staff", label: "Staff", href: "/staff", icon: IdCard },
   {
     key: "bookings",
     label: "Bookings",
@@ -168,6 +175,30 @@ type CustomerEditForm = CustomerForm & {
   customerId: string;
 };
 
+type StaffForm = {
+  name: string;
+  mobileNumber: string;
+  aadharNumber: string;
+  panNumber: string;
+  emergencyContact: string;
+  monthlySalary: number;
+  employeeType: string;
+};
+
+type StaffEditForm = StaffForm & {
+  staffId: string;
+  isActive: boolean;
+};
+
+type StaffSalaryPaymentForm = {
+  staffId: string;
+  staffName: string;
+  salaryMonth: string;
+  daysWorked: number;
+  amount: number;
+  paidOn: string;
+};
+
 type BookingEntryForm = {
   bookingId: string;
   type: "income" | "expense";
@@ -187,6 +218,8 @@ type CommonExpenseForm = {
 };
 
 type UserRole = "Admin" | "Manager";
+
+const roleStorageKey = "stayledger-role";
 
 const bookingEntryCategories = [
   "Decoration",
@@ -213,12 +246,25 @@ const commonExpenseCategories = [
   "Other",
 ];
 
+const employeeTypes = [
+  "Manager",
+  "Caretaker",
+  "Housekeeping",
+  "Cook",
+  "Security",
+  "Maintenance",
+  "Driver",
+  "Staff",
+];
+
 const expenseHistoryPageSize = 10;
 
 const emptyDashboardData: DashboardData = {
   homestays: [],
   rooms: [],
   customers: [],
+  staffMembers: [],
+  staffSalaryPayments: [],
   bookings: [],
   accountEntries: [],
 };
@@ -237,6 +283,7 @@ export function ResortDashboard({
     startOfMonthIso(new Date()),
   );
   const [expenseDateTo, setExpenseDateTo] = useState(endOfMonthIso(new Date()));
+  const [staffSalaryMonth, setStaffSalaryMonth] = useState(todayMonth());
   const [expenseHistoryPage, setExpenseHistoryPage] = useState(1);
   const [expenseHistoryReloadKey, setExpenseHistoryReloadKey] = useState(0);
   const [calendarMonth, setCalendarMonth] = useState(todayMonth());
@@ -262,25 +309,34 @@ export function ResortDashboard({
   const [showEditBookingModal, setShowEditBookingModal] = useState(false);
   const [showEditHomestayModal, setShowEditHomestayModal] = useState(false);
   const [showEditCustomerModal, setShowEditCustomerModal] = useState(false);
+  const [showEditStaffModal, setShowEditStaffModal] = useState(false);
+  const [showStaffSalaryPaymentModal, setShowStaffSalaryPaymentModal] =
+    useState(false);
   const [showHomestayForm, setShowHomestayForm] = useState(false);
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [showQuickCustomerModal, setShowQuickCustomerModal] = useState(false);
   const [homestaySaveError, setHomestaySaveError] = useState("");
   const [customerSaveError, setCustomerSaveError] = useState("");
+  const [staffSaveError, setStaffSaveError] = useState("");
+  const [staffSalaryError, setStaffSalaryError] = useState("");
   const [bookingEntrySaveError, setBookingEntrySaveError] = useState("");
   const [commonExpenseSaveError, setCommonExpenseSaveError] = useState("");
   const [commonExpenseDeleteError, setCommonExpenseDeleteError] = useState("");
   const [editBookingSaveError, setEditBookingSaveError] = useState("");
   const [editHomestaySaveError, setEditHomestaySaveError] = useState("");
   const [editCustomerSaveError, setEditCustomerSaveError] = useState("");
+  const [editStaffSaveError, setEditStaffSaveError] = useState("");
   const [isHomestaySaving, setIsHomestaySaving] = useState(false);
   const [isCustomerSaving, setIsCustomerSaving] = useState(false);
+  const [isStaffSaving, setIsStaffSaving] = useState(false);
   const [isBookingEntrySaving, setIsBookingEntrySaving] = useState(false);
   const [isCommonExpenseSaving, setIsCommonExpenseSaving] = useState(false);
   const [deletingCommonExpenseId, setDeletingCommonExpenseId] = useState("");
   const [isBookingUpdating, setIsBookingUpdating] = useState(false);
   const [isHomestayUpdating, setIsHomestayUpdating] = useState(false);
   const [isCustomerUpdating, setIsCustomerUpdating] = useState(false);
+  const [isStaffUpdating, setIsStaffUpdating] = useState(false);
+  const [updatingStaffSalaryId, setUpdatingStaffSalaryId] = useState("");
   const [homestayForm, setHomestayForm] = useState<HomestayForm>({
     name: "",
     location: "",
@@ -315,6 +371,35 @@ export function ResortDashboard({
     city: "",
     preferences: "",
   });
+  const [staffForm, setStaffForm] = useState<StaffForm>({
+    name: "",
+    mobileNumber: "",
+    aadharNumber: "",
+    panNumber: "",
+    emergencyContact: "",
+    monthlySalary: 0,
+    employeeType: "Staff",
+  });
+  const [staffEditForm, setStaffEditForm] = useState<StaffEditForm>({
+    staffId: "",
+    name: "",
+    mobileNumber: "",
+    aadharNumber: "",
+    panNumber: "",
+    emergencyContact: "",
+    monthlySalary: 0,
+    employeeType: "Staff",
+    isActive: true,
+  });
+  const [staffSalaryPaymentForm, setStaffSalaryPaymentForm] =
+    useState<StaffSalaryPaymentForm>({
+      staffId: "",
+      staffName: "",
+      salaryMonth: salaryMonthDate(staffSalaryMonth),
+      daysWorked: 0,
+      amount: 0,
+      paidOn: todayIso(),
+    });
   const [bookingForm, setBookingForm] = useState<BookingForm>({
     customerId: "",
     homestayId: "",
@@ -364,6 +449,8 @@ export function ResortDashboard({
     homestays,
     rooms,
     customers,
+    staffMembers,
+    staffSalaryPayments,
     bookings: bookingList,
     accountEntries,
   } = data;
@@ -377,7 +464,9 @@ export function ResortDashboard({
       setSessionEmail(sessionData.session?.user.email ?? "");
       setUserId(sessionData.session?.user.id ?? "");
       setActiveRole(
-        resolveUserRole(sessionData.session?.user.user_metadata?.role),
+        resolveUserRole(
+          sessionData.session?.user.user_metadata?.role ?? readStoredRole(),
+        ),
       );
     });
 
@@ -386,7 +475,9 @@ export function ResortDashboard({
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSessionEmail(session?.user.email ?? "");
       setUserId(session?.user.id ?? "");
-      setActiveRole(resolveUserRole(session?.user.user_metadata?.role));
+      setActiveRole(
+        resolveUserRole(session?.user.user_metadata?.role ?? readStoredRole()),
+      );
     });
 
     return () => {
@@ -552,6 +643,12 @@ export function ResortDashboard({
     );
   }, [accountEntries, dateFrom, dateTo, selectedHomestayId]);
 
+  const visibleSalaryPayments = useMemo(() => {
+    return staffSalaryPayments.filter((payment) =>
+      isDateInRange(payment.paidOn, dateFrom, dateTo),
+    );
+  }, [dateFrom, dateTo, staffSalaryPayments]);
+
   const filteredCommonExpenseTotal = useMemo(() => {
     return accountEntries.filter(
       (entry) =>
@@ -598,6 +695,13 @@ export function ResortDashboard({
     const bookingExtraExpense = bookingLinkedEntries
       .filter((entry) => entry.type === "expense")
       .reduce((total, entry) => total + entry.amount, 0);
+    const propertyExpenses = visibleAccounts
+      .filter((entry) => entry.type === "expense" && !entry.bookingId)
+      .reduce((total, entry) => total + entry.amount, 0);
+    const salaryExpenses = visibleSalaryPayments.reduce(
+      (total, payment) => total + payment.amount,
+      0,
+    );
     const totalRevenue =
       bookedRevenue + bookingExtraIncome - bookingExtraExpense;
     const pending = bookedRevenue - received;
@@ -615,11 +719,20 @@ export function ResortDashboard({
       totalRevenue,
       bookingExtraIncome,
       bookingExtraExpense,
+      expenses: propertyExpenses + salaryExpenses,
+      salaryExpenses,
       received,
       pending,
       occupancy: totalUnits > 0 ? Math.round((occupied / totalUnits) * 100) : 0,
     };
-  }, [accountEntries, homestays, selectedHomestayId, visibleBookings]);
+  }, [
+    accountEntries,
+    homestays,
+    selectedHomestayId,
+    visibleAccounts,
+    visibleBookings,
+    visibleSalaryPayments,
+  ]);
   const showDashboardSummary =
     activeModule === "overview" || activeModule === "accounts";
 
@@ -936,6 +1049,153 @@ export function ResortDashboard({
     }
   }
 
+  async function addStaff(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!userId) {
+      setStaffSaveError("Sign in before adding staff.");
+      return;
+    }
+
+    if (!staffForm.name.trim() || !staffForm.mobileNumber.trim()) {
+      setStaffSaveError("Name and mobile number are required.");
+      return;
+    }
+
+    setIsStaffSaving(true);
+    setStaffSaveError("");
+
+    try {
+      await createStaff({
+        ownerId: userId,
+        name: staffForm.name,
+        mobileNumber: staffForm.mobileNumber,
+        aadharNumber: staffForm.aadharNumber,
+        panNumber: staffForm.panNumber,
+        emergencyContact: staffForm.emergencyContact,
+        monthlySalary: staffForm.monthlySalary,
+        employeeType: staffForm.employeeType,
+      });
+
+      const refreshedData = await fetchDashboardData();
+
+      setData(refreshedData);
+      setStaffForm(createBlankStaffForm());
+      setActiveModule("staff");
+    } catch (error) {
+      setStaffSaveError(
+        error instanceof Error ? error.message : "Unable to add staff.",
+      );
+    } finally {
+      setIsStaffSaving(false);
+    }
+  }
+
+  async function saveStaffEdits(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!userId) {
+      setEditStaffSaveError("Sign in before editing staff.");
+      return;
+    }
+
+    if (!staffEditForm.staffId) {
+      setEditStaffSaveError("Select a staff member to edit.");
+      return;
+    }
+
+    if (!staffEditForm.name.trim() || !staffEditForm.mobileNumber.trim()) {
+      setEditStaffSaveError("Name and mobile number are required.");
+      return;
+    }
+
+    setIsStaffUpdating(true);
+    setEditStaffSaveError("");
+
+    try {
+      await updateStaff({
+        id: staffEditForm.staffId,
+        name: staffEditForm.name,
+        mobileNumber: staffEditForm.mobileNumber,
+        aadharNumber: staffEditForm.aadharNumber,
+        panNumber: staffEditForm.panNumber,
+        emergencyContact: staffEditForm.emergencyContact,
+        monthlySalary: staffEditForm.monthlySalary,
+        employeeType: staffEditForm.employeeType,
+        isActive: staffEditForm.isActive,
+      });
+
+      const refreshedData = await fetchDashboardData();
+
+      setData(refreshedData);
+      setShowEditStaffModal(false);
+      setActiveModule("staff");
+    } catch (error) {
+      setEditStaffSaveError(
+        error instanceof Error ? error.message : "Unable to update staff.",
+      );
+    } finally {
+      setIsStaffUpdating(false);
+    }
+  }
+
+  async function saveStaffSalaryPayment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!staffSalaryPaymentForm.staffId) {
+      setStaffSalaryError("Select a staff member before marking salary paid.");
+      return;
+    }
+
+    if (!staffSalaryPaymentForm.paidOn) {
+      setStaffSalaryError("Paid date is required.");
+      return;
+    }
+
+    setUpdatingStaffSalaryId(staffSalaryPaymentForm.staffId);
+    setStaffSalaryError("");
+
+    try {
+      await markStaffSalaryPaid({
+        staffId: staffSalaryPaymentForm.staffId,
+        salaryMonth: staffSalaryPaymentForm.salaryMonth,
+        amount: Math.max(0, Number(staffSalaryPaymentForm.amount)),
+        daysWorked: Math.max(0, Number(staffSalaryPaymentForm.daysWorked)),
+        paidOn: staffSalaryPaymentForm.paidOn,
+      });
+
+      const refreshedData = await fetchDashboardData();
+
+      setData(refreshedData);
+      setShowStaffSalaryPaymentModal(false);
+    } catch (error) {
+      setStaffSalaryError(
+        error instanceof Error ? error.message : "Unable to mark salary paid.",
+      );
+    } finally {
+      setUpdatingStaffSalaryId("");
+    }
+  }
+
+  async function markStaffUnpaid(staff: StaffMember) {
+    setUpdatingStaffSalaryId(staff.id);
+    setStaffSalaryError("");
+
+    try {
+      await markStaffSalaryUnpaid(staff.id, salaryMonthDate(staffSalaryMonth));
+
+      const refreshedData = await fetchDashboardData();
+
+      setData(refreshedData);
+    } catch (error) {
+      setStaffSalaryError(
+        error instanceof Error ? error.message : "Unable to mark salary unpaid.",
+      );
+    } finally {
+      setUpdatingStaffSalaryId("");
+    }
+  }
+
   async function addQuickCustomer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -1186,6 +1446,7 @@ export function ResortDashboard({
     }
 
     await supabase.auth.signOut();
+    forgetStoredRole();
     setData(emptyDashboardData);
   }
 
@@ -1283,6 +1544,41 @@ export function ResortDashboard({
     });
     setEditCustomerSaveError("");
     setShowEditCustomerModal(true);
+  }
+
+  function openEditStaffModal(staff: StaffMember) {
+    setStaffEditForm({
+      staffId: staff.id,
+      name: staff.name,
+      mobileNumber: staff.mobileNumber,
+      aadharNumber: staff.aadharNumber,
+      panNumber: staff.panNumber,
+      emergencyContact: staff.emergencyContact,
+      monthlySalary: staff.monthlySalary,
+      employeeType: staff.employeeType,
+      isActive: staff.isActive,
+    });
+    setEditStaffSaveError("");
+    setShowEditStaffModal(true);
+  }
+
+  function openStaffSalaryPaymentModal(staff: StaffMember) {
+    const salaryMonth = salaryMonthDate(staffSalaryMonth);
+    const existingPayment = staffSalaryPayments.find(
+      (payment) =>
+        payment.staffId === staff.id && payment.salaryMonth === salaryMonth,
+    );
+
+    setStaffSalaryPaymentForm({
+      staffId: staff.id,
+      staffName: staff.name,
+      salaryMonth,
+      daysWorked: existingPayment?.daysWorked ?? 0,
+      amount: existingPayment?.amount ?? staff.monthlySalary,
+      paidOn: existingPayment?.paidOn ?? todayIso(),
+    });
+    setStaffSalaryError("");
+    setShowStaffSalaryPaymentModal(true);
   }
 
   return (
@@ -1613,7 +1909,6 @@ export function ResortDashboard({
                 <MetricGrid
                   metrics={metrics}
                   bookings={visibleBookings}
-                  accounts={visibleAccounts}
                 />
               </>
             )}
@@ -1692,6 +1987,26 @@ export function ResortDashboard({
               />
             )}
 
+            {activeModule === "staff" && (
+              <StaffPanel
+                form={staffForm}
+                staffMembers={staffMembers}
+                salaryPayments={staffSalaryPayments}
+                salaryMonth={staffSalaryMonth}
+                isSaving={isStaffSaving}
+                saveError={staffSaveError}
+                salaryError={staffSalaryError}
+                updatingSalaryStaffId={updatingStaffSalaryId}
+                disabled={!userId}
+                onChange={setStaffForm}
+                onSubmit={addStaff}
+                onEditStaff={openEditStaffModal}
+                onSalaryMonthChange={setStaffSalaryMonth}
+                onMarkPaid={openStaffSalaryPaymentModal}
+                onMarkUnpaid={markStaffUnpaid}
+              />
+            )}
+
             {activeModule === "expenses" && (
               <div className="space-y-5">
                 <DateFilterBar
@@ -1739,7 +2054,14 @@ export function ResortDashboard({
             )}
 
             {activeModule === "accounts" && (
-              <AccountsPanel accounts={visibleAccounts} homestays={homestays} />
+              <AccountsPanel
+                accounts={visibleAccounts}
+                homestays={homestays}
+                staffMembers={staffMembers}
+                salaryPayments={visibleSalaryPayments}
+                totalRevenue={metrics.totalRevenue}
+                totalExpenses={metrics.expenses}
+              />
             )}
           </div>
         </main>
@@ -1848,6 +2170,38 @@ export function ResortDashboard({
         </DashboardModal>
       )}
 
+      {showEditStaffModal && (
+        <DashboardModal
+          ariaLabel="Edit staff"
+          onClose={() => setShowEditStaffModal(false)}
+        >
+          <StaffEditFormPanel
+            form={staffEditForm}
+            isSaving={isStaffUpdating}
+            error={editStaffSaveError}
+            disabled={!userId}
+            onChange={setStaffEditForm}
+            onSubmit={saveStaffEdits}
+          />
+        </DashboardModal>
+      )}
+
+      {showStaffSalaryPaymentModal && (
+        <DashboardModal
+          ariaLabel="Mark salary paid"
+          onClose={() => setShowStaffSalaryPaymentModal(false)}
+        >
+          <StaffSalaryPaymentPanel
+            form={staffSalaryPaymentForm}
+            isSaving={updatingStaffSalaryId === staffSalaryPaymentForm.staffId}
+            error={staffSalaryError}
+            disabled={!userId}
+            onChange={setStaffSalaryPaymentForm}
+            onSubmit={saveStaffSalaryPayment}
+          />
+        </DashboardModal>
+      )}
+
       {pendingDeleteCommonExpense && (
         <DashboardModal
           ariaLabel="Delete expense"
@@ -1873,24 +2227,20 @@ export function ResortDashboard({
 function MetricGrid({
   metrics,
   bookings: visibleBookings,
-  accounts,
 }: {
   metrics: {
     bookedRevenue: number;
     totalRevenue: number;
     bookingExtraIncome: number;
     bookingExtraExpense: number;
+    expenses: number;
+    salaryExpenses: number;
     received: number;
     pending: number;
     occupancy: number;
   };
   bookings: Booking[];
-  accounts: AccountEntry[];
 }) {
-  const expenses = accounts
-    .filter((entry) => entry.type === "expense")
-    .reduce((total, entry) => total + entry.amount, 0);
-
   return (
     <section className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-5">
       <MetricCard
@@ -1923,8 +2273,8 @@ function MetricGrid({
       />
       <MetricCard
         label="Expenses"
-        value={inr.format(expenses)}
-        detail="Housekeeping and repairs"
+        value={inr.format(metrics.expenses)}
+        detail={`${inr.format(metrics.salaryExpenses)} staff salaries`}
         icon={ReceiptText}
         trend="down"
       />
@@ -4726,6 +5076,556 @@ function CustomerTable({
   );
 }
 
+function StaffPanel({
+  form,
+  staffMembers,
+  salaryPayments,
+  salaryMonth,
+  isSaving,
+  saveError,
+  salaryError,
+  updatingSalaryStaffId,
+  disabled,
+  onChange,
+  onSubmit,
+  onEditStaff,
+  onSalaryMonthChange,
+  onMarkPaid,
+  onMarkUnpaid,
+}: {
+  form: StaffForm;
+  staffMembers: StaffMember[];
+  salaryPayments: DashboardData["staffSalaryPayments"];
+  salaryMonth: string;
+  isSaving: boolean;
+  saveError: string;
+  salaryError: string;
+  updatingSalaryStaffId: string;
+  disabled: boolean;
+  onChange: (form: StaffForm) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onEditStaff: (staff: StaffMember) => void;
+  onSalaryMonthChange: (month: string) => void;
+  onMarkPaid: (staff: StaffMember) => void;
+  onMarkUnpaid: (staff: StaffMember) => void;
+}) {
+  const [staffSearch, setStaffSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const selectedSalaryMonth = salaryMonthDate(salaryMonth);
+  const visibleStaff = useMemo(() => {
+    const term = staffSearch.trim().toLowerCase();
+
+    return staffMembers
+      .filter((staff) => {
+        const haystack =
+          `${staff.name} ${staff.mobileNumber} ${staff.aadharNumber} ${staff.panNumber} ${staff.employeeType}`.toLowerCase();
+        const matchesSearch = !term || haystack.includes(term);
+        const matchesType =
+          typeFilter === "all" || staff.employeeType === typeFilter;
+
+        return matchesSearch && matchesType;
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [staffMembers, staffSearch, typeFilter]);
+  const activeStaffCount = staffMembers.filter((staff) => staff.isActive).length;
+  const paidStaffIds = new Set(
+    salaryPayments
+      .filter((payment) => payment.salaryMonth === selectedSalaryMonth)
+      .map((payment) => payment.staffId),
+  );
+  const paidCount = staffMembers.filter((staff) =>
+    paidStaffIds.has(staff.id),
+  ).length;
+  const salaryDue = staffMembers
+    .filter((staff) => !paidStaffIds.has(staff.id))
+    .reduce((total, staff) => total + staff.monthlySalary, 0);
+  const typeOptions = Array.from(
+    new Set([...employeeTypes, ...staffMembers.map((staff) => staff.employeeType)]),
+  ).filter(Boolean);
+
+  return (
+    <section className="grid min-w-0 gap-5 2xl:grid-cols-[420px_minmax(0,1fr)]">
+      <StaffCreateForm
+        form={form}
+        isSaving={isSaving}
+        error={saveError}
+        disabled={disabled}
+        onChange={onChange}
+        onSubmit={onSubmit}
+      />
+
+      <div className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-4 border-b border-slate-200 p-4 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-slate-950">
+              Staff
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Team details and salary status for the selected month.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,220px)_180px_180px]">
+            <label className="relative min-w-0">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Search staff
+              </span>
+              <Search className="pointer-events-none absolute left-3 top-[34px] h-4 w-4 text-slate-400" />
+              <input
+                value={staffSearch}
+                onChange={(event) => setStaffSearch(event.target.value)}
+                className="h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-800 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                placeholder="Name, mobile, ID"
+              />
+            </label>
+            <Field label="Type">
+              <select
+                value={typeFilter}
+                onChange={(event) => setTypeFilter(event.target.value)}
+                className="field-control"
+              >
+                <option value="all">All types</option>
+                {typeOptions.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Salary month">
+              <input
+                type="month"
+                value={salaryMonth}
+                onChange={(event) => onSalaryMonthChange(event.target.value)}
+                className="field-control"
+              />
+            </Field>
+          </div>
+        </div>
+
+        <div className="grid gap-3 border-b border-slate-100 p-4 md:grid-cols-3">
+          <Stat label="Active staff" value={String(activeStaffCount)} />
+          <Stat
+            label={`${formatMonthLabel(salaryMonth)} paid`}
+            value={`${paidCount}/${staffMembers.length}`}
+          />
+          <Stat label="Salary due" value={inr.format(salaryDue)} />
+        </div>
+
+        {salaryError && (
+          <p className="border-b border-slate-100 p-4 text-sm font-medium text-red-700">
+            {salaryError}
+          </p>
+        )}
+
+        <div className="divide-y divide-slate-100">
+          {visibleStaff.length === 0 && (
+            <EmptyState message="No staff matched the current filters." />
+          )}
+          {visibleStaff.map((staff) => {
+            const payment = salaryPayments.find(
+              (item) =>
+                item.staffId === staff.id &&
+                item.salaryMonth === selectedSalaryMonth,
+            );
+            const isPaid = Boolean(payment);
+            const isUpdating = updatingSalaryStaffId === staff.id;
+
+            return (
+              <article
+                key={staff.id}
+                className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_160px_210px] xl:items-center"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold text-slate-950">
+                      {staff.name}
+                    </p>
+                    <span
+                      className={`rounded-md border px-2 py-1 text-xs font-semibold ${
+                        staff.isActive
+                          ? "border-teal-200 bg-teal-50 text-teal-700"
+                          : "border-slate-200 bg-slate-50 text-slate-500"
+                      }`}
+                    >
+                      {staff.isActive ? "active" : "inactive"}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {staff.employeeType} - {staff.mobileNumber || "No mobile"}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Emergency: {staff.emergencyContact || "Not recorded"}
+                  </p>
+                </div>
+
+                <div className="grid gap-1 text-sm text-slate-600">
+                  <p>Aadhar: {staff.aadharNumber || "Not recorded"}</p>
+                  <p>PAN: {staff.panNumber || "Not recorded"}</p>
+                  <p>
+                    Days worked:{" "}
+                    {payment ? String(payment.daysWorked) : "Not marked"}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-sm font-semibold text-slate-950">
+                    {inr.format(payment?.amount ?? staff.monthlySalary)}
+                  </p>
+                  <span
+                    className={`mt-2 inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${
+                      isPaid
+                        ? "border-teal-200 bg-teal-50 text-teal-700"
+                        : "border-amber-200 bg-amber-50 text-amber-700"
+                    }`}
+                  >
+                    {isPaid ? "Paid" : "Unpaid"}
+                  </span>
+                  {payment && (
+                    <div className="mt-1 space-y-0.5 text-xs text-slate-500">
+                      <p>Paid on {formatDate(payment.paidOn)}</p>
+                      <p>Expected {inr.format(staff.monthlySalary)}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => onEditStaff(staff)}
+                    className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit
+                  </button>
+                  {isPaid ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onMarkPaid(staff)}
+                        disabled={disabled || isUpdating}
+                        className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+                      >
+                        Edit pay
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onMarkUnpaid(staff)}
+                        disabled={disabled || isUpdating}
+                        className="inline-flex h-9 items-center justify-center rounded-md border border-amber-200 px-3 text-sm font-semibold text-amber-700 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:text-amber-300"
+                      >
+                        {isUpdating ? "Saving" : "Mark unpaid"}
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onMarkPaid(staff)}
+                      disabled={disabled || isUpdating}
+                      className="inline-flex h-9 items-center justify-center rounded-md bg-teal-700 px-3 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                    >
+                      {isUpdating ? "Saving" : "Mark paid"}
+                    </button>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function StaffCreateForm({
+  form,
+  isSaving,
+  error,
+  disabled,
+  onChange,
+  onSubmit,
+}: {
+  form: StaffForm;
+  isSaving: boolean;
+  error: string;
+  disabled: boolean;
+  onChange: (form: StaffForm) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <h2 className="text-base font-semibold text-slate-950">Add staff</h2>
+      <p className="mt-1 text-sm text-slate-500">
+        Record employee identity, contact, type, and default monthly salary.
+      </p>
+      <form className="mt-5 space-y-4" onSubmit={onSubmit}>
+        <StaffFormFields form={form} disabled={disabled} onChange={onChange} />
+        <button
+          type="submit"
+          disabled={
+            disabled || isSaving || !form.name.trim() || !form.mobileNumber.trim()
+          }
+          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+        >
+          <Plus className="h-4 w-4" />
+          {isSaving ? "Saving staff" : "Add staff"}
+        </button>
+        {disabled && (
+          <p className="text-sm text-slate-500">Sign in before adding staff.</p>
+        )}
+        {error && <p className="text-sm font-medium text-red-700">{error}</p>}
+      </form>
+    </section>
+  );
+}
+
+function StaffEditFormPanel({
+  form,
+  isSaving,
+  error,
+  disabled,
+  onChange,
+  onSubmit,
+}: {
+  form: StaffEditForm;
+  isSaving: boolean;
+  error: string;
+  disabled: boolean;
+  onChange: (form: StaffEditForm) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <section className="min-w-0 bg-white">
+      <h2 className="text-base font-semibold text-slate-950">Edit Staff</h2>
+      <p className="mt-1 text-sm text-slate-500">
+        Update staff details, status, employee type, and default salary.
+      </p>
+      <form className="mt-5 space-y-4" onSubmit={onSubmit}>
+        <StaffFormFields
+          form={form}
+          disabled={disabled}
+          onChange={(nextForm) => onChange({ ...form, ...nextForm })}
+        />
+        <label className="flex h-10 items-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-medium text-slate-700">
+          <input
+            type="checkbox"
+            checked={form.isActive}
+            onChange={(event) =>
+              onChange({ ...form, isActive: event.target.checked })
+            }
+            disabled={disabled}
+            className="h-4 w-4 rounded border-slate-300 text-teal-700"
+          />
+          Active employee
+        </label>
+        <button
+          type="submit"
+          disabled={
+            disabled || isSaving || !form.name.trim() || !form.mobileNumber.trim()
+          }
+          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+        >
+          <Pencil className="h-4 w-4" />
+          {isSaving ? "Saving staff" : "Update staff"}
+        </button>
+        {error && <p className="text-sm font-medium text-red-700">{error}</p>}
+      </form>
+    </section>
+  );
+}
+
+function StaffSalaryPaymentPanel({
+  form,
+  isSaving,
+  error,
+  disabled,
+  onChange,
+  onSubmit,
+}: {
+  form: StaffSalaryPaymentForm;
+  isSaving: boolean;
+  error: string;
+  disabled: boolean;
+  onChange: (form: StaffSalaryPaymentForm) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <section className="min-w-0 bg-white">
+      <h2 className="text-base font-semibold text-slate-950">
+        Mark salary paid
+      </h2>
+      <p className="mt-1 text-sm text-slate-500">
+        Record monthly work days, paid date, and paid amount for {form.staffName}.
+      </p>
+      <form className="mt-5 space-y-4" onSubmit={onSubmit}>
+        <Field label="Salary month">
+          <input
+            type="month"
+            value={form.salaryMonth.slice(0, 7)}
+            onChange={(event) =>
+              onChange({
+                ...form,
+                salaryMonth: salaryMonthDate(event.target.value),
+              })
+            }
+            className="field-control"
+            disabled={disabled || isSaving}
+            required
+          />
+        </Field>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Days worked">
+            <input
+              type="number"
+              min="0"
+              value={form.daysWorked}
+              onChange={(event) =>
+                onChange({ ...form, daysWorked: Number(event.target.value) })
+              }
+              className="field-control"
+              disabled={disabled || isSaving}
+              required
+            />
+          </Field>
+          <Field label="Paid amount">
+            <input
+              type="number"
+              min="0"
+              value={form.amount}
+              onChange={(event) =>
+                onChange({ ...form, amount: Number(event.target.value) })
+              }
+              className="field-control"
+              disabled={disabled || isSaving}
+              required
+            />
+          </Field>
+        </div>
+        <Field label="Paid date">
+          <input
+            type="date"
+            value={form.paidOn}
+            onChange={(event) => onChange({ ...form, paidOn: event.target.value })}
+            className="field-control"
+            disabled={disabled || isSaving}
+            required
+          />
+        </Field>
+        <button
+          type="submit"
+          disabled={
+            disabled ||
+            isSaving ||
+            !form.staffId ||
+            !form.paidOn ||
+            form.daysWorked < 0 ||
+            form.amount < 0
+          }
+          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+        >
+          <CheckCircle2 className="h-4 w-4" />
+          {isSaving ? "Saving payment" : "Save payment"}
+        </button>
+        {error && <p className="text-sm font-medium text-red-700">{error}</p>}
+      </form>
+    </section>
+  );
+}
+
+function StaffFormFields({
+  form,
+  disabled,
+  onChange,
+}: {
+  form: StaffForm;
+  disabled: boolean;
+  onChange: (form: StaffForm) => void;
+}) {
+  return (
+    <>
+      <Field label="Name">
+        <input
+          value={form.name}
+          onChange={(event) => onChange({ ...form, name: event.target.value })}
+          className="field-control"
+          required
+          disabled={disabled}
+        />
+      </Field>
+      <Field label="Mobile number">
+        <input
+          value={form.mobileNumber}
+          onChange={(event) =>
+            onChange({ ...form, mobileNumber: event.target.value })
+          }
+          className="field-control"
+          required
+          disabled={disabled}
+        />
+      </Field>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Aadhar number">
+          <input
+            value={form.aadharNumber}
+            onChange={(event) =>
+              onChange({ ...form, aadharNumber: event.target.value })
+            }
+            className="field-control"
+            disabled={disabled}
+          />
+        </Field>
+        <Field label="PAN number">
+          <input
+            value={form.panNumber}
+            onChange={(event) =>
+              onChange({ ...form, panNumber: event.target.value })
+            }
+            className="field-control"
+            disabled={disabled}
+          />
+        </Field>
+      </div>
+      <Field label="Emergency contact">
+        <input
+          value={form.emergencyContact}
+          onChange={(event) =>
+            onChange({ ...form, emergencyContact: event.target.value })
+          }
+          className="field-control"
+          disabled={disabled}
+        />
+      </Field>
+      <Field label="Employee type">
+        <select
+          value={form.employeeType}
+          onChange={(event) =>
+            onChange({ ...form, employeeType: event.target.value })
+          }
+          className="field-control"
+          disabled={disabled}
+        >
+          {employeeTypes.map((type) => (
+            <option key={type} value={type}>
+              {type}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Monthly salary">
+        <input
+          type="number"
+          min="0"
+          value={form.monthlySalary}
+          onChange={(event) =>
+            onChange({ ...form, monthlySalary: Number(event.target.value) })
+          }
+          className="field-control"
+          disabled={disabled}
+        />
+      </Field>
+    </>
+  );
+}
+
 function CommonExpensesPanel({
   form,
   homestays,
@@ -5047,16 +5947,46 @@ function CommonExpensesPanel({
 function AccountsPanel({
   accounts,
   homestays,
+  staffMembers,
+  salaryPayments,
+  totalRevenue,
+  totalExpenses,
 }: {
   accounts: AccountEntry[];
   homestays: Homestay[];
+  staffMembers: StaffMember[];
+  salaryPayments: DashboardData["staffSalaryPayments"];
+  totalRevenue: number;
+  totalExpenses: number;
 }) {
-  const income = accounts
-    .filter((entry) => entry.type === "income")
-    .reduce((total, entry) => total + entry.amount, 0);
-  const expense = accounts
-    .filter((entry) => entry.type === "expense")
-    .reduce((total, entry) => total + entry.amount, 0);
+  const transactions = [
+    ...accounts.map((entry) => {
+      const homestay = homestays.find(
+        (item) => item.id === entry.homestayId,
+      );
+
+      return {
+        id: `account-${entry.id}`,
+        label: entry.label,
+        detail: `${homestay?.name ?? "Unknown homestay"} - ${entry.category}`,
+        date: entry.date,
+        amount: entry.amount,
+        type: entry.type,
+      };
+    }),
+    ...salaryPayments.map((payment) => {
+      const staff = staffMembers.find((item) => item.id === payment.staffId);
+
+      return {
+        id: `salary-${payment.id}`,
+        label: `${staff?.name ?? "Staff member"} salary`,
+        detail: `Business-wide - ${formatMonthLabel(payment.salaryMonth)}`,
+        date: payment.paidOn,
+        amount: payment.amount,
+        type: "expense" as const,
+      };
+    }),
+  ].sort((first, second) => second.date.localeCompare(first.date));
 
   return (
     <section className="grid min-w-0 gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
@@ -5069,11 +5999,19 @@ function AccountsPanel({
         </p>
 
         <div className="mt-5 space-y-3">
-          <AccountSummary label="Income" value={income} tone="income" />
-          <AccountSummary label="Expenses" value={expense} tone="expense" />
+          <AccountSummary
+            label="Total revenue"
+            value={totalRevenue}
+            tone="income"
+          />
+          <AccountSummary
+            label="Expenses"
+            value={totalExpenses}
+            tone="expense"
+          />
           <AccountSummary
             label="Net position"
-            value={income - expense}
+            value={totalRevenue - totalExpenses}
             tone="net"
           />
         </div>
@@ -5086,37 +6024,33 @@ function AccountsPanel({
           </h3>
         </div>
         <div className="divide-y divide-slate-100">
-          {accounts.length === 0 && (
-            <EmptyState message="No account entries matched the current homestay filter." />
+          {transactions.length === 0 && (
+            <EmptyState message="No transactions matched the current filters." />
           )}
-          {accounts.map((entry) => {
-            const homestay = homestays.find(
-              (item) => item.id === entry.homestayId,
-            );
-
-            return (
-              <div
-                key={entry.id}
-                className="grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_150px_140px] md:items-center"
-              >
-                <div>
-                  <p className="font-medium text-slate-950">{entry.label}</p>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {homestay?.name} - {entry.category}
-                  </p>
-                </div>
-                <span className="text-sm text-slate-500">
-                  {formatDate(entry.date)}
-                </span>
-                <span
-                  className={`text-right text-sm font-semibold ${entry.type === "income" ? "text-teal-700" : "text-red-700"}`}
-                >
-                  {entry.type === "income" ? "+" : "-"}
-                  {inr.format(entry.amount)}
-                </span>
+          {transactions.map((transaction) => (
+            <div
+              key={transaction.id}
+              className="grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_150px_140px] md:items-center"
+            >
+              <div>
+                <p className="font-medium text-slate-950">
+                  {transaction.label}
+                </p>
+                <p className="mt-1 text-sm text-slate-500">
+                  {transaction.detail}
+                </p>
               </div>
-            );
-          })}
+              <span className="text-sm text-slate-500">
+                {formatDate(transaction.date)}
+              </span>
+              <span
+                className={`text-right text-sm font-semibold ${transaction.type === "income" ? "text-teal-700" : "text-red-700"}`}
+              >
+                {transaction.type === "income" ? "+" : "-"}
+                {inr.format(transaction.amount)}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
     </section>
@@ -5285,6 +6219,10 @@ function formatDateRangeLabel(from: string, to: string) {
   return "All dates";
 }
 
+function salaryMonthDate(month: string) {
+  return month ? `${month}-01` : `${todayMonth()}-01`;
+}
+
 function isDateInRange(value: string, from: string, to: string) {
   if (!value) {
     return false;
@@ -5404,6 +6342,24 @@ function resolveUserRole(role: unknown): UserRole {
   return role === "Manager" ? "Manager" : "Admin";
 }
 
+function readStoredRole(): UserRole | undefined {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  const role = window.localStorage.getItem(roleStorageKey);
+
+  return role === "Admin" || role === "Manager" ? role : undefined;
+}
+
+function forgetStoredRole() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(roleStorageKey);
+}
+
 function getBookingEntries(entries: AccountEntry[], bookingId: string) {
   return entries.filter((entry) => entry.bookingId === bookingId);
 }
@@ -5516,6 +6472,18 @@ function createBlankRoomForm(defaultRate = 0): HomestayRoomForm {
     name: "",
     capacity: 2,
     nightlyRate: defaultRate,
+  };
+}
+
+function createBlankStaffForm(): StaffForm {
+  return {
+    name: "",
+    mobileNumber: "",
+    aadharNumber: "",
+    panNumber: "",
+    emergencyContact: "",
+    monthlySalary: 0,
+    employeeType: "Staff",
   };
 }
 

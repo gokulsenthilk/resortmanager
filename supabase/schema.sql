@@ -88,6 +88,35 @@ create table if not exists public.account_entries (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.staff_members (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references auth.users (id) on delete cascade,
+  full_name text not null,
+  mobile_number text not null,
+  aadhar_number text,
+  pan_number text,
+  emergency_contact text,
+  monthly_salary numeric(12, 2) not null default 0 check (monthly_salary >= 0),
+  employee_type text not null default 'Staff',
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.staff_salary_payments (
+  id uuid primary key default gen_random_uuid(),
+  staff_id uuid not null references public.staff_members (id) on delete cascade,
+  salary_month date not null,
+  amount numeric(12, 2) not null default 0 check (amount >= 0),
+  days_worked integer not null default 0 check (days_worked >= 0),
+  paid_on date not null default current_date,
+  created_at timestamptz not null default now(),
+  constraint staff_salary_payments_unique_month unique (staff_id, salary_month)
+);
+
+alter table public.staff_salary_payments
+  add column if not exists days_worked integer not null default 0 check (days_worked >= 0);
+
 create index if not exists homestays_owner_id_idx on public.homestays (owner_id);
 create index if not exists customers_owner_id_idx on public.customers (owner_id);
 create index if not exists customers_owner_name_idx on public.customers (owner_id, full_name);
@@ -103,12 +132,24 @@ create index if not exists account_entries_date_idx on public.account_entries (e
 create index if not exists account_entries_common_expenses_idx
   on public.account_entries (homestay_id, entry_date desc, id desc)
   where entry_type = 'expense' and booking_id is null;
+create index if not exists staff_members_owner_name_idx on public.staff_members (owner_id, full_name);
+create index if not exists staff_salary_payments_staff_month_idx on public.staff_salary_payments (staff_id, salary_month desc);
 
 alter table public.homestays enable row level security;
 alter table public.customers enable row level security;
 alter table public.rooms enable row level security;
 alter table public.bookings enable row level security;
 alter table public.account_entries enable row level security;
+alter table public.staff_members enable row level security;
+alter table public.staff_salary_payments enable row level security;
+
+drop policy if exists "owners can manage homestays" on public.homestays;
+drop policy if exists "owners can manage customers" on public.customers;
+drop policy if exists "owners can manage rooms" on public.rooms;
+drop policy if exists "owners can manage bookings" on public.bookings;
+drop policy if exists "owners can manage account entries" on public.account_entries;
+drop policy if exists "owners can manage staff" on public.staff_members;
+drop policy if exists "owners can manage staff salary payments" on public.staff_salary_payments;
 
 create policy "owners can manage homestays"
 on public.homestays
@@ -181,5 +222,31 @@ with check (
     from public.homestays h
     where h.id = account_entries.homestay_id
       and h.owner_id = (select auth.uid())
+  )
+);
+
+create policy "owners can manage staff"
+on public.staff_members
+for all
+using (owner_id = (select auth.uid()))
+with check (owner_id = (select auth.uid()));
+
+create policy "owners can manage staff salary payments"
+on public.staff_salary_payments
+for all
+using (
+  exists (
+    select 1
+    from public.staff_members s
+    where s.id = staff_salary_payments.staff_id
+      and s.owner_id = (select auth.uid())
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.staff_members s
+    where s.id = staff_salary_payments.staff_id
+      and s.owner_id = (select auth.uid())
   )
 );

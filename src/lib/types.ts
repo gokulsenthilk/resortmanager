@@ -4,6 +4,7 @@ export type ModuleKey =
   | "overview"
   | "homestays"
   | "customers"
+  | "staff"
   | "bookings"
   | "calendar"
   | "expenses"
@@ -73,6 +74,27 @@ export type AccountEntry = {
   status: "cleared" | "pending" | "overdue";
 };
 
+export type StaffMember = {
+  id: string;
+  name: string;
+  mobileNumber: string;
+  aadharNumber: string;
+  panNumber: string;
+  emergencyContact: string;
+  monthlySalary: number;
+  employeeType: string;
+  isActive: boolean;
+};
+
+export type StaffSalaryPayment = {
+  id: string;
+  staffId: string;
+  salaryMonth: string;
+  amount: number;
+  daysWorked: number;
+  paidOn: string;
+};
+
 export type NavItem = {
   key: ModuleKey;
   label: string;
@@ -84,6 +106,8 @@ export type DashboardData = {
   homestays: Homestay[];
   rooms: Room[];
   customers: Customer[];
+  staffMembers: StaffMember[];
+  staffSalaryPayments: StaffSalaryPayment[];
   bookings: Booking[];
   accountEntries: AccountEntry[];
 };

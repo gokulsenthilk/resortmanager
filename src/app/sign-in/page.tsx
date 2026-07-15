@@ -9,6 +9,8 @@ import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 type UserRole = "Admin" | "Manager";
 
+const roleStorageKey = "stayledger-role";
+
 export default function SignInPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -51,15 +53,8 @@ export default function SignInPage() {
       return;
     }
 
-    const { error: roleError } = await supabase.auth.updateUser({
-      data: { role },
-    });
-
-    if (roleError) {
-      setError(roleError.message);
-      setIsLoading(false);
-      return;
-    }
+    rememberSelectedRole(role);
+    void supabase.auth.updateUser({ data: { role } });
 
     router.replace("/");
   }
@@ -158,4 +153,12 @@ export default function SignInPage() {
       </section>
     </main>
   );
+}
+
+function rememberSelectedRole(role: UserRole) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(roleStorageKey, role);
 }
