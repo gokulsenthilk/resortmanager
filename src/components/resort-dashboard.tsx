@@ -60,6 +60,7 @@ import type {
   NavItem,
   Room,
   StaffMember,
+  StaffSalaryPayment,
 } from "@/lib/types";
 
 const navItems: NavItem[] = [
@@ -1177,16 +1178,19 @@ export function ResortDashboard({
     }
   }
 
-  async function markStaffUnpaid(staff: StaffMember) {
-    setUpdatingStaffSalaryId(staff.id);
+  async function markStaffUnpaid(payment: StaffSalaryPayment) {
+    setUpdatingStaffSalaryId(payment.staffId);
     setStaffSalaryError("");
 
     try {
-      await markStaffSalaryUnpaid(staff.id, salaryMonthDate(staffSalaryMonth));
+      await markStaffSalaryUnpaid(payment.id);
 
-      const refreshedData = await fetchDashboardData();
-
-      setData(refreshedData);
+      setData((current) => ({
+        ...current,
+        staffSalaryPayments: current.staffSalaryPayments.filter(
+          (item) => item.id !== payment.id,
+        ),
+      }));
     } catch (error) {
       setStaffSalaryError(
         error instanceof Error ? error.message : "Unable to mark salary unpaid.",
@@ -5107,7 +5111,7 @@ function StaffPanel({
   onEditStaff: (staff: StaffMember) => void;
   onSalaryMonthChange: (month: string) => void;
   onMarkPaid: (staff: StaffMember) => void;
-  onMarkUnpaid: (staff: StaffMember) => void;
+  onMarkUnpaid: (payment: StaffSalaryPayment) => void;
 }) {
   const [staffSearch, setStaffSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -5309,7 +5313,7 @@ function StaffPanel({
                       </button>
                       <button
                         type="button"
-                        onClick={() => onMarkUnpaid(staff)}
+                        onClick={() => payment && onMarkUnpaid(payment)}
                         disabled={disabled || isUpdating}
                         className="inline-flex h-9 items-center justify-center rounded-md border border-amber-200 px-3 text-sm font-semibold text-amber-700 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:text-amber-300"
                       >

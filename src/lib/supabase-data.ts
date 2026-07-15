@@ -657,21 +657,26 @@ export async function markStaffSalaryPaid(
 }
 
 export async function markStaffSalaryUnpaid(
-  staffId: string,
-  salaryMonth: string,
+  paymentId: string,
 ): Promise<void> {
   if (!supabase) {
     throw new Error("Supabase environment variables are not configured.");
   }
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("staff_salary_payments")
     .delete()
-    .eq("staff_id", staffId)
-    .eq("salary_month", salaryMonth);
+    .eq("id", paymentId)
+    .select("id");
 
   if (error) {
     throw new Error(error.message);
+  }
+
+  if (!data?.length) {
+    throw new Error(
+      "The salary payment was not removed. Refresh the page and try again.",
+    );
   }
 }
 
