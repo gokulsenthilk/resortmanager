@@ -93,10 +93,13 @@ create table if not exists public.staff_members (
   owner_id uuid not null references auth.users (id) on delete cascade,
   full_name text not null,
   mobile_number text not null,
+  email text,
+  date_of_joining date,
   aadhar_number text,
   pan_number text,
   emergency_contact text,
   monthly_salary numeric(12, 2) not null default 0 check (monthly_salary >= 0),
+  monthly_incentive numeric(12, 2) not null default 0 check (monthly_incentive >= 0),
   employee_type text not null default 'Staff',
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
@@ -108,6 +111,12 @@ create table if not exists public.staff_salary_payments (
   staff_id uuid not null references public.staff_members (id) on delete cascade,
   salary_month date not null,
   amount numeric(12, 2) not null default 0 check (amount >= 0),
+  base_amount numeric(12, 2) not null default 0 check (base_amount >= 0),
+  incentive_amount numeric(12, 2) not null default 0 check (incentive_amount >= 0),
+  advance_amount numeric(12, 2) not null default 0 check (advance_amount >= 0),
+  cash_amount numeric(12, 2) not null default 0 check (cash_amount >= 0),
+  bank_amount numeric(12, 2) not null default 0 check (bank_amount >= 0),
+  payment_method text not null default 'cash' check (payment_method in ('cash', 'bank', 'split')),
   days_worked integer not null default 0 check (days_worked >= 0),
   paid_on date not null default current_date,
   created_at timestamptz not null default now(),
@@ -116,6 +125,19 @@ create table if not exists public.staff_salary_payments (
 
 alter table public.staff_salary_payments
   add column if not exists days_worked integer not null default 0 check (days_worked >= 0);
+
+alter table public.staff_members
+  add column if not exists email text,
+  add column if not exists date_of_joining date,
+  add column if not exists monthly_incentive numeric(12, 2) not null default 0 check (monthly_incentive >= 0);
+
+alter table public.staff_salary_payments
+  add column if not exists base_amount numeric(12, 2) not null default 0 check (base_amount >= 0),
+  add column if not exists incentive_amount numeric(12, 2) not null default 0 check (incentive_amount >= 0),
+  add column if not exists advance_amount numeric(12, 2) not null default 0 check (advance_amount >= 0),
+  add column if not exists cash_amount numeric(12, 2) not null default 0 check (cash_amount >= 0),
+  add column if not exists bank_amount numeric(12, 2) not null default 0 check (bank_amount >= 0),
+  add column if not exists payment_method text not null default 'cash' check (payment_method in ('cash', 'bank', 'split'));
 
 create index if not exists homestays_owner_id_idx on public.homestays (owner_id);
 create index if not exists customers_owner_id_idx on public.customers (owner_id);

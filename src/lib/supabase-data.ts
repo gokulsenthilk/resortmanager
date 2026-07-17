@@ -9,6 +9,7 @@ import type {
   HomestayStatus,
   Room,
   StaffMember,
+  StaffPaymentMethod,
   StaffSalaryPayment,
 } from "./types";
 
@@ -70,10 +71,13 @@ type StaffMemberRow = {
   id: string;
   full_name: string;
   mobile_number: string;
+  email: string | null;
+  date_of_joining: string | null;
   aadhar_number: string | null;
   pan_number: string | null;
   emergency_contact: string | null;
   monthly_salary: string | number;
+  monthly_incentive: string | number;
   employee_type: string;
   is_active: boolean;
 };
@@ -83,6 +87,12 @@ type StaffSalaryPaymentRow = {
   staff_id: string;
   salary_month: string;
   amount: string | number;
+  base_amount: string | number;
+  incentive_amount: string | number;
+  advance_amount: string | number;
+  cash_amount: string | number;
+  bank_amount: string | number;
+  payment_method: StaffPaymentMethod;
   days_worked: number;
   paid_on: string;
 };
@@ -149,10 +159,13 @@ export type CreateStaffInput = {
   ownerId: string;
   name: string;
   mobileNumber: string;
+  email: string;
+  dateOfJoining: string;
   aadharNumber: string;
   panNumber: string;
   emergencyContact: string;
   monthlySalary: number;
+  monthlyIncentive: number;
   employeeType: string;
 };
 
@@ -164,7 +177,12 @@ export type UpdateStaffInput = Omit<CreateStaffInput, "ownerId"> & {
 export type StaffSalaryPaymentInput = {
   staffId: string;
   salaryMonth: string;
-  amount: number;
+  baseAmount: number;
+  incentiveAmount: number;
+  advanceAmount: number;
+  cashAmount: number;
+  bankAmount: number;
+  paymentMethod: StaffPaymentMethod;
   daysWorked: number;
   paidOn: string;
 };
@@ -243,11 +261,11 @@ export async function fetchDashboardData(): Promise<DashboardData> {
       .order("entry_date", { ascending: false }),
     supabase
       .from("staff_members")
-      .select("id,full_name,mobile_number,aadhar_number,pan_number,emergency_contact,monthly_salary,employee_type,is_active")
+      .select("id,full_name,mobile_number,email,date_of_joining,aadhar_number,pan_number,emergency_contact,monthly_salary,monthly_incentive,employee_type,is_active")
       .order("full_name", { ascending: true }),
     supabase
       .from("staff_salary_payments")
-      .select("id,staff_id,salary_month,amount,days_worked,paid_on")
+      .select("id,staff_id,salary_month,amount,base_amount,incentive_amount,advance_amount,cash_amount,bank_amount,payment_method,days_worked,paid_on")
       .order("salary_month", { ascending: false }),
   ]);
 
@@ -596,10 +614,13 @@ export async function createStaff(input: CreateStaffInput): Promise<void> {
     owner_id: input.ownerId,
     full_name: input.name,
     mobile_number: input.mobileNumber,
+    email: input.email || null,
+    date_of_joining: input.dateOfJoining || null,
     aadhar_number: input.aadharNumber || null,
     pan_number: input.panNumber || null,
     emergency_contact: input.emergencyContact || null,
     monthly_salary: input.monthlySalary,
+    monthly_incentive: input.monthlyIncentive,
     employee_type: input.employeeType,
     is_active: true,
   });
@@ -619,10 +640,13 @@ export async function updateStaff(input: UpdateStaffInput): Promise<void> {
     .update({
       full_name: input.name,
       mobile_number: input.mobileNumber,
+      email: input.email || null,
+      date_of_joining: input.dateOfJoining || null,
       aadhar_number: input.aadharNumber || null,
       pan_number: input.panNumber || null,
       emergency_contact: input.emergencyContact || null,
       monthly_salary: input.monthlySalary,
+      monthly_incentive: input.monthlyIncentive,
       employee_type: input.employeeType,
       is_active: input.isActive,
     })
@@ -640,11 +664,18 @@ export async function markStaffSalaryPaid(
     throw new Error("Supabase environment variables are not configured.");
   }
 
+  const amount = input.advanceAmount + input.cashAmount + input.bankAmount;
   const { error } = await supabase.from("staff_salary_payments").upsert(
     {
       staff_id: input.staffId,
       salary_month: input.salaryMonth,
-      amount: input.amount,
+      amount,
+      base_amount: input.baseAmount,
+      incentive_amount: input.incentiveAmount,
+      advance_amount: input.advanceAmount,
+      cash_amount: input.cashAmount,
+      bank_amount: input.bankAmount,
+      payment_method: input.paymentMethod,
       days_worked: input.daysWorked,
       paid_on: input.paidOn,
     },
@@ -902,10 +933,13 @@ function mapStaffMember(row: StaffMemberRow): StaffMember {
     id: row.id,
     name: row.full_name,
     mobileNumber: row.mobile_number,
+    email: row.email ?? "",
+    dateOfJoining: row.date_of_joining ?? "",
     aadharNumber: row.aadhar_number ?? "",
     panNumber: row.pan_number ?? "",
     emergencyContact: row.emergency_contact ?? "",
     monthlySalary: Number(row.monthly_salary),
+    monthlyIncentive: Number(row.monthly_incentive),
     employeeType: row.employee_type,
     isActive: row.is_active,
   };
@@ -914,14 +948,39 @@ function mapStaffMember(row: StaffMemberRow): StaffMember {
 function mapStaffSalaryPayment(
   row: StaffSalaryPaymentRow,
 ): StaffSalaryPayment {
+  const amount = Number(row.amount);
+  const baseAmount = Number(row.base_amount);
+  const incentiveAmount = Number(row.incentive_amount);
+  const advanceAmount = Number(row.advance_amount);
+  const storedCashAmount = Number(row.cash_amount);
+  const bankAmount = Number(row.bank_amount);
+  const hasPaymentBreakdown =
+    advanceAmount > 0 || storedCashAmount > 0 || bankAmount > 0;
+
   return {
     id: row.id,
     staffId: row.staff_id,
     salaryMonth: row.salary_month,
-    amount: Number(row.amount),
+    amount,
+    baseAmount: baseAmount || amount,
+    incentiveAmount,
+    advanceAmount,
+    cashAmount: hasPaymentBreakdown ? storedCashAmount : amount,
+    bankAmount,
+    paymentMethod: normalizeStaffPaymentMethod(
+      hasPaymentBreakdown ? row.payment_method : "cash",
+    ),
     daysWorked: row.days_worked,
     paidOn: row.paid_on,
   };
+}
+
+function normalizeStaffPaymentMethod(value: string): StaffPaymentMethod {
+  if (value === "bank" || value === "split") {
+    return value;
+  }
+
+  return "cash";
 }
 
 function normalizeChannel(channel: string): Booking["channel"] {

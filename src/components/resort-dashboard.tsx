@@ -60,6 +60,7 @@ import type {
   NavItem,
   Room,
   StaffMember,
+  StaffPaymentMethod,
   StaffSalaryPayment,
 } from "@/lib/types";
 
@@ -179,10 +180,13 @@ type CustomerEditForm = CustomerForm & {
 type StaffForm = {
   name: string;
   mobileNumber: string;
+  email: string;
+  dateOfJoining: string;
   aadharNumber: string;
   panNumber: string;
   emergencyContact: string;
   monthlySalary: number;
+  monthlyIncentive: number;
   employeeType: string;
 };
 
@@ -196,7 +200,12 @@ type StaffSalaryPaymentForm = {
   staffName: string;
   salaryMonth: string;
   daysWorked: number;
-  amount: number;
+  baseAmount: number;
+  incentiveAmount: number;
+  advanceAmount: number;
+  cashAmount: number;
+  bankAmount: number;
+  paymentMethod: StaffPaymentMethod;
   paidOn: string;
 };
 
@@ -256,6 +265,15 @@ const employeeTypes = [
   "Maintenance",
   "Driver",
   "Staff",
+];
+
+const staffPaymentMethods: Array<{
+  value: StaffPaymentMethod;
+  label: string;
+}> = [
+  { value: "cash", label: "Cash" },
+  { value: "bank", label: "Bank" },
+  { value: "split", label: "Split" },
 ];
 
 const expenseHistoryPageSize = 10;
@@ -375,20 +393,26 @@ export function ResortDashboard({
   const [staffForm, setStaffForm] = useState<StaffForm>({
     name: "",
     mobileNumber: "",
+    email: "",
+    dateOfJoining: "",
     aadharNumber: "",
     panNumber: "",
     emergencyContact: "",
     monthlySalary: 0,
+    monthlyIncentive: 0,
     employeeType: "Staff",
   });
   const [staffEditForm, setStaffEditForm] = useState<StaffEditForm>({
     staffId: "",
     name: "",
     mobileNumber: "",
+    email: "",
+    dateOfJoining: "",
     aadharNumber: "",
     panNumber: "",
     emergencyContact: "",
     monthlySalary: 0,
+    monthlyIncentive: 0,
     employeeType: "Staff",
     isActive: true,
   });
@@ -398,7 +422,12 @@ export function ResortDashboard({
       staffName: "",
       salaryMonth: salaryMonthDate(staffSalaryMonth),
       daysWorked: 0,
-      amount: 0,
+      baseAmount: 0,
+      incentiveAmount: 0,
+      advanceAmount: 0,
+      cashAmount: 0,
+      bankAmount: 0,
+      paymentMethod: "cash",
       paidOn: todayIso(),
     });
   const [bookingForm, setBookingForm] = useState<BookingForm>({
@@ -1071,10 +1100,13 @@ export function ResortDashboard({
         ownerId: userId,
         name: staffForm.name,
         mobileNumber: staffForm.mobileNumber,
+        email: staffForm.email,
+        dateOfJoining: staffForm.dateOfJoining,
         aadharNumber: staffForm.aadharNumber,
         panNumber: staffForm.panNumber,
         emergencyContact: staffForm.emergencyContact,
         monthlySalary: staffForm.monthlySalary,
+        monthlyIncentive: staffForm.monthlyIncentive,
         employeeType: staffForm.employeeType,
       });
 
@@ -1118,10 +1150,13 @@ export function ResortDashboard({
         id: staffEditForm.staffId,
         name: staffEditForm.name,
         mobileNumber: staffEditForm.mobileNumber,
+        email: staffEditForm.email,
+        dateOfJoining: staffEditForm.dateOfJoining,
         aadharNumber: staffEditForm.aadharNumber,
         panNumber: staffEditForm.panNumber,
         emergencyContact: staffEditForm.emergencyContact,
         monthlySalary: staffEditForm.monthlySalary,
+        monthlyIncentive: staffEditForm.monthlyIncentive,
         employeeType: staffEditForm.employeeType,
         isActive: staffEditForm.isActive,
       });
@@ -1153,6 +1188,46 @@ export function ResortDashboard({
       return;
     }
 
+    const grossPay =
+      staffSalaryPaymentForm.baseAmount +
+      staffSalaryPaymentForm.incentiveAmount;
+    const paidTotal =
+      staffSalaryPaymentForm.advanceAmount +
+      staffSalaryPaymentForm.cashAmount +
+      staffSalaryPaymentForm.bankAmount;
+
+    if (Math.abs(grossPay - paidTotal) > 0.01) {
+      setStaffSalaryError(
+        `Payment breakdown must equal ${inr.format(grossPay)} salary and incentives.`,
+      );
+      return;
+    }
+
+    if (
+      staffSalaryPaymentForm.paymentMethod === "cash" &&
+      staffSalaryPaymentForm.bankAmount > 0
+    ) {
+      setStaffSalaryError("Bank amount must be zero for a cash payment.");
+      return;
+    }
+
+    if (
+      staffSalaryPaymentForm.paymentMethod === "bank" &&
+      staffSalaryPaymentForm.cashAmount > 0
+    ) {
+      setStaffSalaryError("Cash amount must be zero for a bank payment.");
+      return;
+    }
+
+    if (
+      staffSalaryPaymentForm.paymentMethod === "split" &&
+      (staffSalaryPaymentForm.cashAmount <= 0 ||
+        staffSalaryPaymentForm.bankAmount <= 0)
+    ) {
+      setStaffSalaryError("A split payment requires both cash and bank amounts.");
+      return;
+    }
+
     setUpdatingStaffSalaryId(staffSalaryPaymentForm.staffId);
     setStaffSalaryError("");
 
@@ -1160,7 +1235,18 @@ export function ResortDashboard({
       await markStaffSalaryPaid({
         staffId: staffSalaryPaymentForm.staffId,
         salaryMonth: staffSalaryPaymentForm.salaryMonth,
-        amount: Math.max(0, Number(staffSalaryPaymentForm.amount)),
+        baseAmount: Math.max(0, Number(staffSalaryPaymentForm.baseAmount)),
+        incentiveAmount: Math.max(
+          0,
+          Number(staffSalaryPaymentForm.incentiveAmount),
+        ),
+        advanceAmount: Math.max(
+          0,
+          Number(staffSalaryPaymentForm.advanceAmount),
+        ),
+        cashAmount: Math.max(0, Number(staffSalaryPaymentForm.cashAmount)),
+        bankAmount: Math.max(0, Number(staffSalaryPaymentForm.bankAmount)),
+        paymentMethod: staffSalaryPaymentForm.paymentMethod,
         daysWorked: Math.max(0, Number(staffSalaryPaymentForm.daysWorked)),
         paidOn: staffSalaryPaymentForm.paidOn,
       });
@@ -1555,10 +1641,13 @@ export function ResortDashboard({
       staffId: staff.id,
       name: staff.name,
       mobileNumber: staff.mobileNumber,
+      email: staff.email,
+      dateOfJoining: staff.dateOfJoining,
       aadharNumber: staff.aadharNumber,
       panNumber: staff.panNumber,
       emergencyContact: staff.emergencyContact,
       monthlySalary: staff.monthlySalary,
+      monthlyIncentive: staff.monthlyIncentive,
       employeeType: staff.employeeType,
       isActive: staff.isActive,
     });
@@ -1578,7 +1667,15 @@ export function ResortDashboard({
       staffName: staff.name,
       salaryMonth,
       daysWorked: existingPayment?.daysWorked ?? 0,
-      amount: existingPayment?.amount ?? staff.monthlySalary,
+      baseAmount: existingPayment?.baseAmount ?? staff.monthlySalary,
+      incentiveAmount:
+        existingPayment?.incentiveAmount ?? staff.monthlyIncentive,
+      advanceAmount: existingPayment?.advanceAmount ?? 0,
+      cashAmount:
+        existingPayment?.cashAmount ??
+        staff.monthlySalary + staff.monthlyIncentive,
+      bankAmount: existingPayment?.bankAmount ?? 0,
+      paymentMethod: existingPayment?.paymentMethod ?? "cash",
       paidOn: existingPayment?.paidOn ?? todayIso(),
     });
     setStaffSalaryError("");
@@ -5122,7 +5219,7 @@ function StaffPanel({
     return staffMembers
       .filter((staff) => {
         const haystack =
-          `${staff.name} ${staff.mobileNumber} ${staff.aadharNumber} ${staff.panNumber} ${staff.employeeType}`.toLowerCase();
+          `${staff.name} ${staff.mobileNumber} ${staff.email} ${staff.aadharNumber} ${staff.panNumber} ${staff.employeeType}`.toLowerCase();
         const matchesSearch = !term || haystack.includes(term);
         const matchesType =
           typeFilter === "all" || staff.employeeType === typeFilter;
@@ -5142,7 +5239,11 @@ function StaffPanel({
   ).length;
   const salaryDue = staffMembers
     .filter((staff) => !paidStaffIds.has(staff.id))
-    .reduce((total, staff) => total + staff.monthlySalary, 0);
+    .reduce(
+      (total, staff) =>
+        total + staff.monthlySalary + staff.monthlyIncentive,
+      0,
+    );
   const typeOptions = Array.from(
     new Set([...employeeTypes, ...staffMembers.map((staff) => staff.employeeType)]),
   ).filter(Boolean);
@@ -5178,7 +5279,7 @@ function StaffPanel({
                 value={staffSearch}
                 onChange={(event) => setStaffSearch(event.target.value)}
                 className="h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-800 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
-                placeholder="Name, mobile, ID"
+                placeholder="Name, mobile, email, ID"
               />
             </label>
             <Field label="Type">
@@ -5237,7 +5338,7 @@ function StaffPanel({
             return (
               <article
                 key={staff.id}
-                className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_160px_210px] xl:items-center"
+                className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_190px_210px] xl:items-center"
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -5258,6 +5359,9 @@ function StaffPanel({
                     {staff.employeeType} - {staff.mobileNumber || "No mobile"}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
+                    {staff.email || "No email"} - Joined {staff.dateOfJoining ? formatDate(staff.dateOfJoining) : "Not recorded"}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
                     Emergency: {staff.emergencyContact || "Not recorded"}
                   </p>
                 </div>
@@ -5268,6 +5372,9 @@ function StaffPanel({
                   <p>
                     Days worked:{" "}
                     {payment ? String(payment.daysWorked) : "Not marked"}
+                  </p>
+                  <p>
+                    Default incentive: {inr.format(staff.monthlyIncentive)}
                   </p>
                 </div>
 
@@ -5287,7 +5394,17 @@ function StaffPanel({
                   {payment && (
                     <div className="mt-1 space-y-0.5 text-xs text-slate-500">
                       <p>Paid on {formatDate(payment.paidOn)}</p>
-                      <p>Expected {inr.format(staff.monthlySalary)}</p>
+                      <p>
+                        {payment.paymentMethod === "split"
+                          ? `Cash ${inr.format(payment.cashAmount)} / Bank ${inr.format(payment.bankAmount)}`
+                          : `${payment.paymentMethod === "cash" ? "Cash" : "Bank"} payment`}
+                      </p>
+                      {payment.advanceAmount > 0 && (
+                        <p>Advance {inr.format(payment.advanceAmount)}</p>
+                      )}
+                      <p>
+                        Incentive {inr.format(payment.incentiveAmount)}
+                      </p>
                     </div>
                   )}
                 </div>
@@ -5359,7 +5476,7 @@ function StaffCreateForm({
     <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <h2 className="text-base font-semibold text-slate-950">Add staff</h2>
       <p className="mt-1 text-sm text-slate-500">
-        Record employee identity, contact, type, and default monthly salary.
+        Record employee contact, joining, payroll, and identity details.
       </p>
       <form className="mt-5 space-y-4" onSubmit={onSubmit}>
         <StaffFormFields form={form} disabled={disabled} onChange={onChange} />
@@ -5401,7 +5518,7 @@ function StaffEditFormPanel({
     <section className="min-w-0 bg-white">
       <h2 className="text-base font-semibold text-slate-950">Edit Staff</h2>
       <p className="mt-1 text-sm text-slate-500">
-        Update staff details, status, employee type, and default salary.
+        Update staff contact, joining, payroll, identity, and status details.
       </p>
       <form className="mt-5 space-y-4" onSubmit={onSubmit}>
         <StaffFormFields
@@ -5452,31 +5569,36 @@ function StaffSalaryPaymentPanel({
   onChange: (form: StaffSalaryPaymentForm) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const grossPay = form.baseAmount + form.incentiveAmount;
+  const paidTotal = form.advanceAmount + form.cashAmount + form.bankAmount;
+  const balance = grossPay - paidTotal;
+  const isBalanced = Math.abs(balance) <= 0.01;
+
   return (
     <section className="min-w-0 bg-white">
       <h2 className="text-base font-semibold text-slate-950">
         Mark salary paid
       </h2>
       <p className="mt-1 text-sm text-slate-500">
-        Record monthly work days, paid date, and paid amount for {form.staffName}.
+        Record work days, incentives, advance, and cash or bank payment for {form.staffName}.
       </p>
       <form className="mt-5 space-y-4" onSubmit={onSubmit}>
-        <Field label="Salary month">
-          <input
-            type="month"
-            value={form.salaryMonth.slice(0, 7)}
-            onChange={(event) =>
-              onChange({
-                ...form,
-                salaryMonth: salaryMonthDate(event.target.value),
-              })
-            }
-            className="field-control"
-            disabled={disabled || isSaving}
-            required
-          />
-        </Field>
         <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Salary month">
+            <input
+              type="month"
+              value={form.salaryMonth.slice(0, 7)}
+              onChange={(event) =>
+                onChange({
+                  ...form,
+                  salaryMonth: salaryMonthDate(event.target.value),
+                })
+              }
+              className="field-control"
+              disabled={disabled || isSaving}
+              required
+            />
+          </Field>
           <Field label="Days worked">
             <input
               type="number"
@@ -5490,13 +5612,66 @@ function StaffSalaryPaymentPanel({
               required
             />
           </Field>
-          <Field label="Paid amount">
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label="Base salary">
             <input
               type="number"
               min="0"
-              value={form.amount}
+              value={form.baseAmount}
               onChange={(event) =>
-                onChange({ ...form, amount: Number(event.target.value) })
+                onChange(
+                  applyStaffPaymentMethod(
+                    {
+                      ...form,
+                      baseAmount: Number(event.target.value),
+                    },
+                    form.paymentMethod,
+                  ),
+                )
+              }
+              className="field-control"
+              disabled={disabled || isSaving}
+              required
+            />
+          </Field>
+          <Field label="Incentives">
+            <input
+              type="number"
+              min="0"
+              value={form.incentiveAmount}
+              onChange={(event) =>
+                onChange(
+                  applyStaffPaymentMethod(
+                    {
+                      ...form,
+                      incentiveAmount: Number(event.target.value),
+                    },
+                    form.paymentMethod,
+                  ),
+                )
+              }
+              className="field-control"
+              disabled={disabled || isSaving}
+              required
+            />
+          </Field>
+          <Field label="Advance already paid">
+            <input
+              type="number"
+              min="0"
+              value={form.advanceAmount}
+              onChange={(event) =>
+                onChange(
+                  applyStaffPaymentMethod(
+                    {
+                      ...form,
+                      advanceAmount: Number(event.target.value),
+                    },
+                    form.paymentMethod,
+                  ),
+                )
               }
               className="field-control"
               disabled={disabled || isSaving}
@@ -5504,11 +5679,87 @@ function StaffSalaryPaymentPanel({
             />
           </Field>
         </div>
+
+        <fieldset>
+          <legend className="mb-1 text-xs font-semibold uppercase text-slate-500">
+            Payment type
+          </legend>
+          <div className="grid grid-cols-3 rounded-md border border-slate-200 bg-slate-50 p-1">
+            {staffPaymentMethods.map((method) => (
+              <button
+                key={method.value}
+                type="button"
+                onClick={() =>
+                  onChange(applyStaffPaymentMethod(form, method.value))
+                }
+                disabled={disabled || isSaving}
+                className={`h-9 rounded text-sm font-semibold transition ${
+                  form.paymentMethod === method.value
+                    ? "bg-white text-slate-950 shadow-sm"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                {method.label}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Cash paid">
+            <input
+              type="number"
+              min="0"
+              value={form.cashAmount}
+              onChange={(event) =>
+                onChange({ ...form, cashAmount: Number(event.target.value) })
+              }
+              className="field-control"
+              disabled={
+                disabled || isSaving || form.paymentMethod === "bank"
+              }
+              required
+            />
+          </Field>
+          <Field label="Bank paid">
+            <input
+              type="number"
+              min="0"
+              value={form.bankAmount}
+              onChange={(event) =>
+                onChange({ ...form, bankAmount: Number(event.target.value) })
+              }
+              className="field-control"
+              disabled={
+                disabled || isSaving || form.paymentMethod === "cash"
+              }
+              required
+            />
+          </Field>
+        </div>
+
+        <div className="grid gap-3 rounded-md bg-slate-50 p-3 sm:grid-cols-3">
+          <Stat label="Gross pay" value={inr.format(grossPay)} />
+          <Stat label="Total paid" value={inr.format(paidTotal)} />
+          <div className="min-w-0 rounded-md bg-white p-3">
+            <p className="text-xs font-medium text-slate-500">Balance</p>
+            <p
+              className={`mt-1 text-sm font-semibold ${
+                isBalanced ? "text-teal-700" : "text-red-700"
+              }`}
+            >
+              {inr.format(balance)}
+            </p>
+          </div>
+        </div>
+
         <Field label="Paid date">
           <input
             type="date"
             value={form.paidOn}
-            onChange={(event) => onChange({ ...form, paidOn: event.target.value })}
+            onChange={(event) =>
+              onChange({ ...form, paidOn: event.target.value })
+            }
             className="field-control"
             disabled={disabled || isSaving}
             required
@@ -5522,12 +5773,17 @@ function StaffSalaryPaymentPanel({
             !form.staffId ||
             !form.paidOn ||
             form.daysWorked < 0 ||
-            form.amount < 0
+            form.baseAmount < 0 ||
+            form.incentiveAmount < 0 ||
+            form.advanceAmount < 0 ||
+            form.cashAmount < 0 ||
+            form.bankAmount < 0 ||
+            !isBalanced
           }
           className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
         >
           <CheckCircle2 className="h-4 w-4" />
-          {isSaving ? "Saving payment" : "Save payment"}
+          {isSaving ? "Saving payment" : "Save salary payment"}
         </button>
         {error && <p className="text-sm font-medium text-red-700">{error}</p>}
       </form>
@@ -5566,6 +5822,30 @@ function StaffFormFields({
           disabled={disabled}
         />
       </Field>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Email ID">
+          <input
+            type="email"
+            value={form.email}
+            onChange={(event) =>
+              onChange({ ...form, email: event.target.value })
+            }
+            className="field-control"
+            disabled={disabled}
+          />
+        </Field>
+        <Field label="Date of joining">
+          <input
+            type="date"
+            value={form.dateOfJoining}
+            onChange={(event) =>
+              onChange({ ...form, dateOfJoining: event.target.value })
+            }
+            className="field-control"
+            disabled={disabled}
+          />
+        </Field>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Aadhar number">
           <input
@@ -5614,18 +5894,35 @@ function StaffFormFields({
           ))}
         </select>
       </Field>
-      <Field label="Monthly salary">
-        <input
-          type="number"
-          min="0"
-          value={form.monthlySalary}
-          onChange={(event) =>
-            onChange({ ...form, monthlySalary: Number(event.target.value) })
-          }
-          className="field-control"
-          disabled={disabled}
-        />
-      </Field>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Monthly salary">
+          <input
+            type="number"
+            min="0"
+            value={form.monthlySalary}
+            onChange={(event) =>
+              onChange({ ...form, monthlySalary: Number(event.target.value) })
+            }
+            className="field-control"
+            disabled={disabled}
+          />
+        </Field>
+        <Field label="Default incentive">
+          <input
+            type="number"
+            min="0"
+            value={form.monthlyIncentive}
+            onChange={(event) =>
+              onChange({
+                ...form,
+                monthlyIncentive: Number(event.target.value),
+              })
+            }
+            className="field-control"
+            disabled={disabled}
+          />
+        </Field>
+      </div>
     </>
   );
 }
@@ -5984,7 +6281,7 @@ function AccountsPanel({
       return {
         id: `salary-${payment.id}`,
         label: `${staff?.name ?? "Staff member"} salary`,
-        detail: `Business-wide - ${formatMonthLabel(payment.salaryMonth)}`,
+        detail: formatSalaryPaymentBreakdown(payment),
         date: payment.paidOn,
         amount: payment.amount,
         type: "expense" as const,
@@ -6223,8 +6520,67 @@ function formatDateRangeLabel(from: string, to: string) {
   return "All dates";
 }
 
+function formatSalaryPaymentBreakdown(payment: StaffSalaryPayment) {
+  const details = [formatMonthLabel(payment.salaryMonth)];
+
+  if (payment.advanceAmount > 0) {
+    details.push(`Advance ${inr.format(payment.advanceAmount)}`);
+  }
+
+  if (payment.cashAmount > 0) {
+    details.push(`Cash ${inr.format(payment.cashAmount)}`);
+  }
+
+  if (payment.bankAmount > 0) {
+    details.push(`Bank ${inr.format(payment.bankAmount)}`);
+  }
+
+  if (payment.incentiveAmount > 0) {
+    details.push(`Incentive ${inr.format(payment.incentiveAmount)}`);
+  }
+
+  return `Business-wide - ${details.join(" - ")}`;
+}
+
 function salaryMonthDate(month: string) {
   return month ? `${month}-01` : `${todayMonth()}-01`;
+}
+
+function applyStaffPaymentMethod(
+  form: StaffSalaryPaymentForm,
+  paymentMethod: StaffPaymentMethod,
+): StaffSalaryPaymentForm {
+  const remainingAmount = Math.max(
+    0,
+    form.baseAmount + form.incentiveAmount - form.advanceAmount,
+  );
+
+  if (paymentMethod === "bank") {
+    return {
+      ...form,
+      paymentMethod,
+      cashAmount: 0,
+      bankAmount: remainingAmount,
+    };
+  }
+
+  if (paymentMethod === "split") {
+    const cashAmount = Math.round((remainingAmount / 2) * 100) / 100;
+
+    return {
+      ...form,
+      paymentMethod,
+      cashAmount,
+      bankAmount: remainingAmount - cashAmount,
+    };
+  }
+
+  return {
+    ...form,
+    paymentMethod,
+    cashAmount: remainingAmount,
+    bankAmount: 0,
+  };
 }
 
 function isDateInRange(value: string, from: string, to: string) {
@@ -6483,10 +6839,13 @@ function createBlankStaffForm(): StaffForm {
   return {
     name: "",
     mobileNumber: "",
+    email: "",
+    dateOfJoining: "",
     aadharNumber: "",
     panNumber: "",
     emergencyContact: "",
     monthlySalary: 0,
+    monthlyIncentive: 0,
     employeeType: "Staff",
   };
 }

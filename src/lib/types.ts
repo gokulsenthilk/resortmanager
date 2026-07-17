@@ -78,19 +78,30 @@ export type StaffMember = {
   id: string;
   name: string;
   mobileNumber: string;
+  email: string;
+  dateOfJoining: string;
   aadharNumber: string;
   panNumber: string;
   emergencyContact: string;
   monthlySalary: number;
+  monthlyIncentive: number;
   employeeType: string;
   isActive: boolean;
 };
+
+export type StaffPaymentMethod = "cash" | "bank" | "split";
 
 export type StaffSalaryPayment = {
   id: string;
   staffId: string;
   salaryMonth: string;
   amount: number;
+  baseAmount: number;
+  incentiveAmount: number;
+  advanceAmount: number;
+  cashAmount: number;
+  bankAmount: number;
+  paymentMethod: StaffPaymentMethod;
   daysWorked: number;
   paidOn: string;
 };
