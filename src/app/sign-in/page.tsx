@@ -42,8 +42,9 @@ export default function SignInPage() {
     setIsLoading(true);
     setError("");
 
-    const { data, error: signInError } =
-      await supabase.auth.signInWithPassword({ email, password });
+    const { data, error: signInError } = await supabase.auth.signInWithPassword(
+      { email, password },
+    );
 
     if (signInError) {
       setError(signInError.message);
@@ -72,15 +73,22 @@ export default function SignInPage() {
           </div>
 
           <div className="mt-20 max-w-xl">
-            <p className="text-xs font-semibold uppercase tracking-wide text-teal-300">Secure team access</p>
-            <h1 className="mt-4 text-4xl font-semibold tracking-normal">Sign in to manage stays, guests, and accounts.</h1>
+            <p className="text-xs font-semibold uppercase tracking-wide text-teal-300">
+              Secure team access
+            </p>
+            <h1 className="mt-4 text-4xl font-semibold tracking-normal">
+              Sign in to manage stays, guests, and accounts.
+            </h1>
             <p className="mt-5 text-base leading-7 text-slate-300">
-              Your access is determined by the role assigned to your Supabase account.
+              Your access is determined by the role assigned to your Supabase
+              account.
             </p>
           </div>
         </div>
 
-        <p className="text-sm text-slate-500">Route access and database policies enforce the same role permissions.</p>
+        <p className="text-sm text-slate-500">
+          Route access and database policies enforce the same role permissions.
+        </p>
       </section>
 
       <section className="flex items-center justify-center p-4 sm:p-8">
@@ -88,12 +96,18 @@ export default function SignInPage() {
           <div className="grid h-11 w-11 place-items-center rounded-lg bg-teal-100 text-teal-800">
             <ShieldCheck className="h-5 w-5" />
           </div>
-          <h2 className="mt-5 text-2xl font-semibold tracking-normal text-slate-950">Sign in</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-500">Use your assigned Admin or Manager account.</p>
+          <h2 className="mt-5 text-2xl font-semibold tracking-normal text-slate-950">
+            Sign in
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            Use your assigned Admin or Manager account.
+          </p>
 
           <form className="mt-6 space-y-4" onSubmit={signIn}>
             <label className="block">
-              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Email</span>
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Email
+              </span>
               <input
                 type="email"
                 value={email}
@@ -104,7 +118,9 @@ export default function SignInPage() {
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Password</span>
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Password
+              </span>
               <input
                 type="password"
                 value={password}
@@ -125,13 +141,13 @@ export default function SignInPage() {
           </form>
 
           {!isSupabaseConfigured && (
-            <p className="mt-4 text-sm font-medium text-red-700">Supabase environment variables are not configured.</p>
+            <p className="mt-4 text-sm font-medium text-red-700">
+              Supabase environment variables are not configured.
+            </p>
           )}
-          {error && <p className="mt-4 text-sm font-medium text-red-700">{error}</p>}
-
-          <Link href="/" className="mt-5 inline-flex text-sm font-semibold text-teal-700 hover:text-teal-800">
-            Back to dashboard
-          </Link>
+          {error && (
+            <p className="mt-4 text-sm font-medium text-red-700">{error}</p>
+          )}
         </div>
       </section>
     </main>
