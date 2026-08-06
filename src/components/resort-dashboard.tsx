@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock3,
+  Copy,
   Filter,
   Home,
   IdCard,
@@ -31,6 +32,12 @@ import {
 import Link from "next/link";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 
+import {
+  canAccessModule,
+  resolveDataOwnerId,
+  resolveUserRole,
+  type UserRole,
+} from "@/lib/authorization";
 import {
   createAccountEntry,
   createBooking,
@@ -227,10 +234,6 @@ type CommonExpenseForm = {
   isCleared: boolean;
 };
 
-type UserRole = "Admin" | "Manager";
-
-const roleStorageKey = "stayledger-role";
-
 const bookingEntryCategories = [
   "Decoration",
   "BBQ",
@@ -320,7 +323,7 @@ export function ResortDashboard({
   const [saveError, setSaveError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [sessionEmail, setSessionEmail] = useState("");
-  const [activeRole, setActiveRole] = useState<UserRole>("Admin");
+  const [activeRole, setActiveRole] = useState<UserRole>("Manager");
   const [userId, setUserId] = useState("");
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [showQuickBookingModal, setShowQuickBookingModal] = useState(false);
@@ -484,6 +487,9 @@ export function ResortDashboard({
     bookings: bookingList,
     accountEntries,
   } = data;
+  const visibleNavItems = navItems.filter((item) =>
+    canAccessModule(activeRole, item.key),
+  );
 
   useEffect(() => {
     if (!supabase) {
@@ -492,11 +498,14 @@ export function ResortDashboard({
 
     supabase.auth.getSession().then(({ data: sessionData }) => {
       setSessionEmail(sessionData.session?.user.email ?? "");
-      setUserId(sessionData.session?.user.id ?? "");
-      setActiveRole(
-        resolveUserRole(
-          sessionData.session?.user.user_metadata?.role ?? readStoredRole(),
+      setUserId(
+        resolveDataOwnerId(
+          sessionData.session?.user.id,
+          sessionData.session?.user.app_metadata?.owner_id,
         ),
+      );
+      setActiveRole(
+        resolveUserRole(sessionData.session?.user.app_metadata?.role),
       );
     });
 
@@ -504,9 +513,14 @@ export function ResortDashboard({
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSessionEmail(session?.user.email ?? "");
-      setUserId(session?.user.id ?? "");
+      setUserId(
+        resolveDataOwnerId(
+          session?.user.id,
+          session?.user.app_metadata?.owner_id,
+        ),
+      );
       setActiveRole(
-        resolveUserRole(session?.user.user_metadata?.role ?? readStoredRole()),
+        resolveUserRole(session?.user.app_metadata?.role),
       );
     });
 
@@ -1536,8 +1550,8 @@ export function ResortDashboard({
     }
 
     await supabase.auth.signOut();
-    forgetStoredRole();
     setData(emptyDashboardData);
+    window.location.assign("/sign-in");
   }
 
   function openHomestayForm() {
@@ -1719,7 +1733,7 @@ export function ResortDashboard({
               </div>
 
               <nav className="space-y-1">
-                {navItems.map((item) => {
+                {visibleNavItems.map((item) => {
                   const Icon = item.icon;
                   const isActive = activeModule === item.key;
 
@@ -1744,32 +1758,34 @@ export function ResortDashboard({
                 })}
               </nav>
 
-              <div className="mt-5 space-y-2 border-t border-white/10 pt-5">
-                <Link
-                  href="/bookings"
-                  onClick={() => setIsMobileNavOpen(false)}
-                  className="inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-md bg-teal-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-teal-400"
-                >
-                  <Plus className="h-4 w-4" />
-                  New booking
-                </Link>
-                <button
-                  type="button"
-                  onClick={openHomestayForm}
-                  className="inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/10"
-                >
-                  <Building2 className="h-4 w-4" />
-                  Add Homestay
-                </button>
-                <button
-                  type="button"
-                  onClick={openCustomerForm}
-                  className="inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/10"
-                >
-                  <UsersRound className="h-4 w-4" />
-                  Add Customer
-                </button>
-              </div>
+              {activeRole === "Admin" && (
+                <div className="mt-5 space-y-2 border-t border-white/10 pt-5">
+                  <Link
+                    href="/bookings"
+                    onClick={() => setIsMobileNavOpen(false)}
+                    className="inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-md bg-teal-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-teal-400"
+                  >
+                    <Plus className="h-4 w-4" />
+                    New booking
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={openHomestayForm}
+                    className="inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/10"
+                  >
+                    <Building2 className="h-4 w-4" />
+                    Add Homestay
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openCustomerForm}
+                    className="inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/10"
+                  >
+                    <UsersRound className="h-4 w-4" />
+                    Add Customer
+                  </button>
+                </div>
+              )}
 
               <SidebarAuthCard
                 isConfigured={isSupabaseConfigured}
@@ -1793,7 +1809,7 @@ export function ResortDashboard({
           </div>
 
           <nav className="space-y-1">
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeModule === item.key;
 
@@ -1889,7 +1905,8 @@ export function ResortDashboard({
                   <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                 </label>
 
-                <div className="grid grid-cols-2 gap-2 lg:hidden">
+                {activeRole === "Admin" && (
+                  <div className="grid grid-cols-2 gap-2 lg:hidden">
                   <button
                     type="button"
                     onClick={openQuickBookingModal}
@@ -1906,34 +1923,37 @@ export function ResortDashboard({
                     <ReceiptText className="h-4 w-4" />
                     Income/expense
                   </button>
-                </div>
+                  </div>
+                )}
 
                 <div className="hidden items-center gap-3 lg:flex lg:flex-wrap lg:justify-end">
-                  <Link
-                    href="/bookings"
-                    className="inline-flex h-10 min-w-36 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800"
-                  >
-                    <Plus className="h-4 w-4" />
-                    New booking
-                  </Link>
-
-                  <button
-                    type="button"
-                    onClick={openHomestayForm}
-                    className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-300"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add Homestay
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={openCustomerForm}
-                    className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-300"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add Customer
-                  </button>
+                  {activeRole === "Admin" && (
+                    <>
+                      <Link
+                        href="/bookings"
+                        className="inline-flex h-10 min-w-36 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800"
+                      >
+                        <Plus className="h-4 w-4" />
+                        New booking
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={openHomestayForm}
+                        className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-300"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Add Homestay
+                      </button>
+                      <button
+                        type="button"
+                        onClick={openCustomerForm}
+                        className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-300"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Add Customer
+                      </button>
+                    </>
+                  )}
 
                   <button
                     type="button"
@@ -2707,6 +2727,7 @@ function BookingsCalendarView({
   month: string;
   onMonthChange: (month: string) => void;
 }) {
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const days = buildCalendarDays(month);
   const monthBookings = bookings.filter((booking) =>
     doesStayOverlapRange(
@@ -2808,6 +2829,7 @@ function BookingsCalendarView({
                       homestay={homestays.find(
                         (item) => item.id === booking.homestayId,
                       )}
+                      onClick={() => setSelectedBooking(booking)}
                     />
                   ))}
                   {dayBookings.length > 3 && (
@@ -2863,6 +2885,7 @@ function BookingsCalendarView({
                       homestay={homestays.find(
                         (item) => item.id === booking.homestayId,
                       )}
+                      onClick={() => setSelectedBooking(booking)}
                       roomy
                     />
                   ))}
@@ -2871,6 +2894,23 @@ function BookingsCalendarView({
             );
           })}
       </div>
+
+      {selectedBooking && (
+        <DashboardModal
+          ariaLabel="Booking details"
+          onClose={() => setSelectedBooking(null)}
+        >
+          <CalendarBookingDetails
+            booking={selectedBooking}
+            customer={customers.find(
+              (item) => item.id === selectedBooking.customerId,
+            )}
+            homestay={homestays.find(
+              (item) => item.id === selectedBooking.homestayId,
+            )}
+          />
+        </DashboardModal>
+      )}
     </section>
   );
 }
@@ -2879,16 +2919,21 @@ function CalendarBookingChip({
   booking,
   customer,
   homestay,
+  onClick,
   roomy = false,
 }: {
   booking: Booking;
   customer?: DashboardData["customers"][number];
   homestay?: Homestay;
+  onClick: () => void;
   roomy?: boolean;
 }) {
   return (
-    <div
-      className={`min-w-0 rounded-md border px-2 py-1.5 ${statusStyles[booking.status]} ${
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`View booking details for ${customer?.name ?? "guest"}`}
+      className={`min-w-0 w-full rounded-md border px-2 py-1.5 text-left transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-1 ${statusStyles[booking.status]} ${
         roomy ? "px-3 py-2" : ""
       }`}
     >
@@ -2907,7 +2952,121 @@ function CalendarBookingChip({
           {inr.format(booking.amount)}
         </p>
       )}
-    </div>
+    </button>
+  );
+}
+
+function CalendarBookingDetails({
+  booking,
+  customer,
+  homestay,
+}: {
+  booking: Booking;
+  customer?: DashboardData["customers"][number];
+  homestay?: Homestay;
+}) {
+  const [copyStatus, setCopyStatus] = useState<
+    "idle" | "copied" | "error"
+  >("idle");
+  const phone = customer?.phone?.trim() ?? "";
+
+  useEffect(() => {
+    if (copyStatus === "idle") {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setCopyStatus("idle"), 2000);
+    return () => window.clearTimeout(timeout);
+  }, [copyStatus]);
+
+  async function copyMobileNumber() {
+    if (!phone) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(phone);
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("error");
+    }
+  }
+
+  return (
+    <section className="pr-10">
+      <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+        Booking details
+      </p>
+      <h2 className="mt-2 text-xl font-semibold text-slate-950">
+        {customer?.name ?? "Guest"}
+      </h2>
+      <div className="mt-2 flex min-h-9 flex-wrap items-center gap-2">
+        <p className="text-sm font-medium text-slate-600">
+          {phone || "Mobile number not recorded"}
+        </p>
+        {phone && (
+          <button
+            type="button"
+            onClick={copyMobileNumber}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 transition hover:border-teal-300 hover:bg-teal-50 hover:text-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
+            aria-label={`Copy mobile number ${phone}`}
+          >
+            {copyStatus === "copied" ? (
+              <CheckCircle2 className="h-3.5 w-3.5 text-teal-600" />
+            ) : (
+              <Copy className="h-3.5 w-3.5" />
+            )}
+            {copyStatus === "copied"
+              ? "Copied"
+              : copyStatus === "error"
+                ? "Try again"
+                : "Copy"}
+          </button>
+        )}
+        <span className="sr-only" aria-live="polite">
+          {copyStatus === "copied"
+            ? "Mobile number copied to clipboard"
+            : copyStatus === "error"
+              ? "Could not copy mobile number"
+              : ""}
+        </span>
+      </div>
+
+      <dl className="mt-4 grid gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
+        <div>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Homestay
+          </dt>
+          <dd className="mt-1 text-sm font-medium text-slate-950">
+            {homestay?.name ?? "Not assigned"}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Room
+          </dt>
+          <dd className="mt-1 text-sm font-medium text-slate-950">
+            {booking.room || "Not assigned"}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Stay
+          </dt>
+          <dd className="mt-1 text-sm font-medium text-slate-950">
+            {formatDate(booking.checkIn)} to {formatDate(booking.checkOut)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Guests
+          </dt>
+          <dd className="mt-1 text-sm font-medium text-slate-950">
+            {booking.guests}
+          </dd>
+        </div>
+      </dl>
+    </section>
   );
 }
 
@@ -5212,6 +5371,8 @@ function StaffPanel({
 }) {
   const [staffSearch, setStaffSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const pageSize = 8;
   const selectedSalaryMonth = salaryMonthDate(salaryMonth);
   const visibleStaff = useMemo(() => {
     const term = staffSearch.trim().toLowerCase();
@@ -5228,6 +5389,10 @@ function StaffPanel({
       })
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [staffMembers, staffSearch, typeFilter]);
+  const totalPages = Math.max(1, Math.ceil(visibleStaff.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const paginatedStaff = visibleStaff.slice(pageStart, pageStart + pageSize);
   const activeStaffCount = staffMembers.filter((staff) => staff.isActive).length;
   const paidStaffIds = new Set(
     salaryPayments
@@ -5277,7 +5442,10 @@ function StaffPanel({
               <Search className="pointer-events-none absolute left-3 top-[34px] h-4 w-4 text-slate-400" />
               <input
                 value={staffSearch}
-                onChange={(event) => setStaffSearch(event.target.value)}
+                onChange={(event) => {
+                  setStaffSearch(event.target.value);
+                  setPage(1);
+                }}
                 className="h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-800 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
                 placeholder="Name, mobile, email, ID"
               />
@@ -5285,7 +5453,10 @@ function StaffPanel({
             <Field label="Type">
               <select
                 value={typeFilter}
-                onChange={(event) => setTypeFilter(event.target.value)}
+                onChange={(event) => {
+                  setTypeFilter(event.target.value);
+                  setPage(1);
+                }}
                 className="field-control"
               >
                 <option value="all">All types</option>
@@ -5322,11 +5493,17 @@ function StaffPanel({
           </p>
         )}
 
+        <div className="border-b border-slate-100 px-4 py-3 text-sm text-slate-500">
+          Showing {visibleStaff.length === 0 ? 0 : pageStart + 1}-
+          {Math.min(pageStart + pageSize, visibleStaff.length)} of{" "}
+          {visibleStaff.length} staff members
+        </div>
+
         <div className="divide-y divide-slate-100">
           {visibleStaff.length === 0 && (
             <EmptyState message="No staff matched the current filters." />
           )}
-          {visibleStaff.map((staff) => {
+          {paginatedStaff.map((staff) => {
             const payment = salaryPayments.find(
               (item) =>
                 item.staffId === staff.id &&
@@ -5451,6 +5628,32 @@ function StaffPanel({
               </article>
             );
           })}
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-slate-500">
+            Page {currentPage} of {totalPages}
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:flex">
+            <button
+              type="button"
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={currentPage === 1}
+              className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setPage((current) => Math.min(totalPages, current + 1))
+              }
+              disabled={currentPage === totalPages}
+              className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
     </section>
@@ -6696,28 +6899,6 @@ function isBookingOnCalendarDay(booking: Booking, day: string) {
       : booking.checkOut;
 
   return booking.checkIn <= day && checkOutDisplayDay >= day;
-}
-
-function resolveUserRole(role: unknown): UserRole {
-  return role === "Manager" ? "Manager" : "Admin";
-}
-
-function readStoredRole(): UserRole | undefined {
-  if (typeof window === "undefined") {
-    return undefined;
-  }
-
-  const role = window.localStorage.getItem(roleStorageKey);
-
-  return role === "Admin" || role === "Manager" ? role : undefined;
-}
-
-function forgetStoredRole() {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.removeItem(roleStorageKey);
 }
 
 function getBookingEntries(entries: AccountEntry[], bookingId: string) {

@@ -5,17 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 
+import { defaultRouteForRole, resolveUserRole } from "@/lib/authorization";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
-
-type UserRole = "Admin" | "Manager";
-
-const roleStorageKey = "stayledger-role";
 
 export default function SignInPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<UserRole>("Admin");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -26,7 +22,11 @@ export default function SignInPage() {
 
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) {
-        router.replace("/");
+        router.replace(
+          defaultRouteForRole(
+            resolveUserRole(data.session.user.app_metadata?.role),
+          ),
+        );
       }
     });
   }, [router]);
@@ -42,10 +42,8 @@ export default function SignInPage() {
     setIsLoading(true);
     setError("");
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { data, error: signInError } =
+      await supabase.auth.signInWithPassword({ email, password });
 
     if (signInError) {
       setError(signInError.message);
@@ -53,10 +51,10 @@ export default function SignInPage() {
       return;
     }
 
-    rememberSelectedRole(role);
-    void supabase.auth.updateUser({ data: { role } });
-
-    router.replace("/");
+    router.replace(
+      defaultRouteForRole(resolveUserRole(data.user.app_metadata?.role)),
+    );
+    router.refresh();
   }
 
   return (
@@ -74,15 +72,15 @@ export default function SignInPage() {
           </div>
 
           <div className="mt-20 max-w-xl">
-            <p className="text-xs font-semibold uppercase tracking-wide text-teal-300">Admin and Manager access</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-teal-300">Secure team access</p>
             <h1 className="mt-4 text-4xl font-semibold tracking-normal">Sign in to manage stays, guests, and accounts.</h1>
             <p className="mt-5 text-base leading-7 text-slate-300">
-              Choose the role for this session, then sign in with the Supabase account that can access your homestay rows.
+              Your access is determined by the role assigned to your Supabase account.
             </p>
           </div>
         </div>
 
-        <p className="text-sm text-slate-500">Roles shown here are application roles. Database access still depends on Supabase RLS.</p>
+        <p className="text-sm text-slate-500">Route access and database policies enforce the same role permissions.</p>
       </section>
 
       <section className="flex items-center justify-center p-4 sm:p-8">
@@ -91,22 +89,7 @@ export default function SignInPage() {
             <ShieldCheck className="h-5 w-5" />
           </div>
           <h2 className="mt-5 text-2xl font-semibold tracking-normal text-slate-950">Sign in</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-500">Use Admin or Manager access for the dashboard.</p>
-
-          <div className="mt-6 grid grid-cols-2 rounded-md border border-slate-200 bg-slate-50 p-1">
-            {(["Admin", "Manager"] as UserRole[]).map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => setRole(item)}
-                className={`h-9 rounded text-sm font-semibold transition ${
-                  role === item ? "bg-white text-slate-950 shadow-sm" : "text-slate-500 hover:text-slate-900"
-                }`}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
+          <p className="mt-2 text-sm leading-6 text-slate-500">Use your assigned Admin or Manager account.</p>
 
           <form className="mt-6 space-y-4" onSubmit={signIn}>
             <label className="block">
@@ -137,7 +120,7 @@ export default function SignInPage() {
               disabled={!isSupabaseConfigured || isLoading}
               className="inline-flex h-10 w-full items-center justify-center rounded-md bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
-              {isLoading ? "Signing in" : `Sign in as ${role}`}
+              {isLoading ? "Signing in" : "Sign in"}
             </button>
           </form>
 
@@ -153,12 +136,4 @@ export default function SignInPage() {
       </section>
     </main>
   );
-}
-
-function rememberSelectedRole(role: UserRole) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(roleStorageKey, role);
 }

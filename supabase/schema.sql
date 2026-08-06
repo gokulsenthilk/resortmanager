@@ -165,6 +165,27 @@ alter table public.account_entries enable row level security;
 alter table public.staff_members enable row level security;
 alter table public.staff_salary_payments enable row level security;
 
+create or replace function public.is_admin()
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  select lower(coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '')) = 'admin';
+$$;
+
+create or replace function public.current_data_owner_id()
+returns uuid
+language sql
+stable
+set search_path = ''
+as $$
+  select coalesce(
+    nullif(auth.jwt() -> 'app_metadata' ->> 'owner_id', '')::uuid,
+    auth.uid()
+  );
+$$;
+
 drop policy if exists "owners can manage homestays" on public.homestays;
 drop policy if exists "owners can manage customers" on public.customers;
 drop policy if exists "owners can manage rooms" on public.rooms;
@@ -172,48 +193,138 @@ drop policy if exists "owners can manage bookings" on public.bookings;
 drop policy if exists "owners can manage account entries" on public.account_entries;
 drop policy if exists "owners can manage staff" on public.staff_members;
 drop policy if exists "owners can manage staff salary payments" on public.staff_salary_payments;
+drop policy if exists "owners can view homestays" on public.homestays;
+drop policy if exists "admins can insert homestays" on public.homestays;
+drop policy if exists "admins can update homestays" on public.homestays;
+drop policy if exists "admins can delete homestays" on public.homestays;
+drop policy if exists "owners can view rooms" on public.rooms;
+drop policy if exists "admins can insert rooms" on public.rooms;
+drop policy if exists "admins can update rooms" on public.rooms;
+drop policy if exists "admins can delete rooms" on public.rooms;
+drop policy if exists "owners can view permitted account entries" on public.account_entries;
+drop policy if exists "owners can insert permitted account entries" on public.account_entries;
+drop policy if exists "owners can update permitted account entries" on public.account_entries;
+drop policy if exists "owners can delete permitted account entries" on public.account_entries;
 
-create policy "owners can manage homestays"
+create policy "owners can view homestays"
 on public.homestays
-for all
-using (owner_id = (select auth.uid()))
-with check (owner_id = (select auth.uid()));
+for select
+to authenticated
+using (owner_id = (select public.current_data_owner_id()));
+
+create policy "admins can insert homestays"
+on public.homestays
+for insert
+to authenticated
+with check (
+  owner_id = (select public.current_data_owner_id())
+  and (select public.is_admin())
+);
+
+create policy "admins can update homestays"
+on public.homestays
+for update
+to authenticated
+using (
+  owner_id = (select public.current_data_owner_id())
+  and (select public.is_admin())
+)
+with check (
+  owner_id = (select public.current_data_owner_id())
+  and (select public.is_admin())
+);
+
+create policy "admins can delete homestays"
+on public.homestays
+for delete
+to authenticated
+using (
+  owner_id = (select public.current_data_owner_id())
+  and (select public.is_admin())
+);
 
 create policy "owners can manage customers"
 on public.customers
 for all
-using (owner_id = (select auth.uid()))
-with check (owner_id = (select auth.uid()));
+to authenticated
+using (owner_id = (select public.current_data_owner_id()))
+with check (owner_id = (select public.current_data_owner_id()));
 
-create policy "owners can manage rooms"
+create policy "owners can view rooms"
 on public.rooms
-for all
+for select
+to authenticated
 using (
   exists (
     select 1
     from public.homestays h
     where h.id = rooms.homestay_id
-      and h.owner_id = (select auth.uid())
+      and h.owner_id = (select public.current_data_owner_id())
   )
-)
+);
+
+create policy "admins can insert rooms"
+on public.rooms
+for insert
+to authenticated
 with check (
+  (select public.is_admin())
+  and
   exists (
     select 1
     from public.homestays h
     where h.id = rooms.homestay_id
-      and h.owner_id = (select auth.uid())
+      and h.owner_id = (select public.current_data_owner_id())
+  )
+);
+
+create policy "admins can update rooms"
+on public.rooms
+for update
+to authenticated
+using (
+  (select public.is_admin())
+  and exists (
+    select 1
+    from public.homestays h
+    where h.id = rooms.homestay_id
+      and h.owner_id = (select public.current_data_owner_id())
+  )
+)
+with check (
+  (select public.is_admin())
+  and exists (
+    select 1
+    from public.homestays h
+    where h.id = rooms.homestay_id
+      and h.owner_id = (select public.current_data_owner_id())
+  )
+);
+
+create policy "admins can delete rooms"
+on public.rooms
+for delete
+to authenticated
+using (
+  (select public.is_admin())
+  and exists (
+    select 1
+    from public.homestays h
+    where h.id = rooms.homestay_id
+      and h.owner_id = (select public.current_data_owner_id())
   )
 );
 
 create policy "owners can manage bookings"
 on public.bookings
 for all
+to authenticated
 using (
   exists (
     select 1
     from public.homestays h
     where h.id = bookings.homestay_id
-      and h.owner_id = (select auth.uid())
+      and h.owner_id = (select public.current_data_owner_id())
   )
 )
 with check (
@@ -222,53 +333,137 @@ with check (
     from public.homestays h
     join public.customers c on c.id = bookings.customer_id
     where h.id = bookings.homestay_id
-      and h.owner_id = (select auth.uid())
-      and c.owner_id = (select auth.uid())
+      and h.owner_id = (select public.current_data_owner_id())
+      and c.owner_id = (select public.current_data_owner_id())
+  )
+  and (
+    room_id is null
+    or exists (
+      select 1
+      from public.rooms r
+      where r.id = bookings.room_id
+        and r.homestay_id = bookings.homestay_id
+    )
   )
 );
 
-create policy "owners can manage account entries"
+create policy "owners can view permitted account entries"
 on public.account_entries
-for all
+for select
+to authenticated
 using (
   exists (
     select 1
     from public.homestays h
     where h.id = account_entries.homestay_id
-      and h.owner_id = (select auth.uid())
+      and h.owner_id = (select public.current_data_owner_id())
   )
+  and ((select public.is_admin()) or booking_id is not null)
+);
+
+create policy "owners can insert permitted account entries"
+on public.account_entries
+for insert
+to authenticated
+with check (
+  exists (
+    select 1
+    from public.homestays h
+    where h.id = account_entries.homestay_id
+      and h.owner_id = (select public.current_data_owner_id())
+  )
+  and ((select public.is_admin()) or booking_id is not null)
+  and (
+    booking_id is null
+    or exists (
+      select 1
+      from public.bookings b
+      where b.id = account_entries.booking_id
+        and b.homestay_id = account_entries.homestay_id
+    )
+  )
+);
+
+create policy "owners can update permitted account entries"
+on public.account_entries
+for update
+to authenticated
+using (
+  exists (
+    select 1
+    from public.homestays h
+    where h.id = account_entries.homestay_id
+      and h.owner_id = (select public.current_data_owner_id())
+  )
+  and ((select public.is_admin()) or booking_id is not null)
 )
 with check (
   exists (
     select 1
     from public.homestays h
     where h.id = account_entries.homestay_id
-      and h.owner_id = (select auth.uid())
+      and h.owner_id = (select public.current_data_owner_id())
   )
+  and ((select public.is_admin()) or booking_id is not null)
+  and (
+    booking_id is null
+    or exists (
+      select 1
+      from public.bookings b
+      where b.id = account_entries.booking_id
+        and b.homestay_id = account_entries.homestay_id
+    )
+  )
+);
+
+create policy "owners can delete permitted account entries"
+on public.account_entries
+for delete
+to authenticated
+using (
+  exists (
+    select 1
+    from public.homestays h
+    where h.id = account_entries.homestay_id
+      and h.owner_id = (select public.current_data_owner_id())
+  )
+  and ((select public.is_admin()) or booking_id is not null)
 );
 
 create policy "owners can manage staff"
 on public.staff_members
 for all
-using (owner_id = (select auth.uid()))
-with check (owner_id = (select auth.uid()));
+to authenticated
+using (
+  owner_id = (select public.current_data_owner_id())
+  and (select public.is_admin())
+)
+with check (
+  owner_id = (select public.current_data_owner_id())
+  and (select public.is_admin())
+);
 
 create policy "owners can manage staff salary payments"
 on public.staff_salary_payments
 for all
+to authenticated
 using (
+  (select public.is_admin())
+  and
   exists (
     select 1
     from public.staff_members s
     where s.id = staff_salary_payments.staff_id
-      and s.owner_id = (select auth.uid())
+      and s.owner_id = (select public.current_data_owner_id())
   )
 )
 with check (
+  (select public.is_admin())
+  and
   exists (
     select 1
     from public.staff_members s
     where s.id = staff_salary_payments.staff_id
-      and s.owner_id = (select auth.uid())
+      and s.owner_id = (select public.current_data_owner_id())
   )
 );

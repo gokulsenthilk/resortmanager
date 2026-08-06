@@ -1,5 +1,5 @@
-import { ResortDashboard } from "@/components/resort-dashboard";
+import { AuthorizedDashboardPage } from "@/components/authorized-dashboard-page";
 
 export default function StaffPage() {
-  return <ResortDashboard key="staff" initialModule="staff" />;
+  return <AuthorizedDashboardPage module="staff" />;
 }

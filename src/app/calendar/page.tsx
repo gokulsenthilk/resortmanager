@@ -1,5 +1,5 @@
-import { ResortDashboard } from "@/components/resort-dashboard";
+import { AuthorizedDashboardPage } from "@/components/authorized-dashboard-page";
 
 export default function CalendarPage() {
-  return <ResortDashboard key="calendar" initialModule="calendar" />;
+  return <AuthorizedDashboardPage module="calendar" />;
 }

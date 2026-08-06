@@ -1,5 +1,5 @@
-import { ResortDashboard } from "@/components/resort-dashboard";
+import { AuthorizedDashboardPage } from "@/components/authorized-dashboard-page";
 
 export default function Home() {
-  return <ResortDashboard key="overview" />;
+  return <AuthorizedDashboardPage module="overview" />;
 }
