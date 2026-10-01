@@ -5,7 +5,6 @@ import {
   ArrowUpRight,
   BarChart3,
   BedDouble,
-  Bell,
   Building2,
   CalendarDays,
   CalendarCheck,
@@ -31,6 +30,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { Brand } from "@/components/brand";
 
 import {
   canAccessModule,
@@ -1697,7 +1697,7 @@ export function ResortDashboard({
   }
 
   return (
-    <div className="min-h-screen bg-white text-slate-950">
+    <div className="dashboard-shell min-h-screen bg-white text-slate-950">
       <div className="flex min-h-screen">
         {isMobileNavOpen && (
           <div className="fixed inset-0 z-50 lg:hidden">
@@ -1707,21 +1707,9 @@ export function ResortDashboard({
               className="absolute inset-0 bg-slate-950/50"
               onClick={() => setIsMobileNavOpen(false)}
             />
-            <aside className="relative flex h-full w-80 max-w-[86vw] flex-col overflow-y-auto overscroll-contain bg-slate-950 px-4 py-5 text-white shadow-2xl">
+            <aside className="dashboard-sidebar relative flex h-full w-80 max-w-[86vw] flex-col overflow-y-auto overscroll-contain bg-slate-950 px-4 py-5 text-white shadow-2xl">
               <div className="mb-6 flex items-center justify-between gap-3 px-2">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-teal-400 text-slate-950">
-                    <BedDouble className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold leading-5">
-                      StayLedger
-                    </p>
-                    <p className="truncate text-xs text-slate-400">
-                      Homestay operations
-                    </p>
-                  </div>
-                </div>
+                <Brand light />
                 <button
                   type="button"
                   aria-label="Close navigation"
@@ -1732,7 +1720,8 @@ export function ResortDashboard({
                 </button>
               </div>
 
-              <nav className="space-y-1">
+              <p className="nav-caption">YOUR WORKSPACE</p>
+              <nav className="dashboard-nav space-y-1" aria-label="Main navigation">
                 {visibleNavItems.map((item) => {
                   const Icon = item.icon;
                   const isActive = activeModule === item.key;
@@ -1741,6 +1730,7 @@ export function ResortDashboard({
                     <Link
                       key={item.key}
                       href={item.href}
+                      aria-current={isActive ? "page" : undefined}
                       onClick={() => {
                         setActiveModule(item.key);
                         setIsMobileNavOpen(false);
@@ -1797,18 +1787,10 @@ export function ResortDashboard({
           </div>
         )}
 
-        <aside className="fixed inset-y-0 left-0 z-30 hidden h-dvh w-72 overflow-y-auto overscroll-contain border-r border-slate-200 bg-slate-950 px-4 py-5 text-white lg:block">
-          <div className="mb-8 flex items-center gap-3 px-2">
-            <div className="grid h-10 w-10 place-items-center rounded-lg bg-teal-400 text-slate-950">
-              <BedDouble className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold leading-5">StayLedger</p>
-              <p className="text-xs text-slate-400">Homestay operations</p>
-            </div>
-          </div>
-
-          <nav className="space-y-1">
+        <aside className="dashboard-sidebar fixed inset-y-0 left-0 z-30 hidden h-dvh w-72 overflow-y-auto overscroll-contain border-r border-slate-200 bg-slate-950 px-4 py-5 text-white lg:block">
+          <Brand light />
+          <p className="nav-caption">YOUR WORKSPACE</p>
+          <nav className="dashboard-nav space-y-1" aria-label="Main navigation">
             {visibleNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeModule === item.key;
@@ -1817,6 +1799,7 @@ export function ResortDashboard({
                 <Link
                   key={item.key}
                   href={item.href}
+                  aria-current={isActive ? "page" : undefined}
                   className={`flex h-11 w-full items-center gap-3 rounded-md px-3 text-sm font-medium transition ${
                     isActive
                       ? "bg-white text-slate-950"
@@ -1830,6 +1813,7 @@ export function ResortDashboard({
             })}
           </nav>
 
+          <div className="sidebar-note"><p>A place for every stay.</p><span>A little order. A lot more possibility.</span></div>
           <SidebarAuthCard
             isConfigured={isSupabaseConfigured}
             email={sessionEmail}
@@ -1839,7 +1823,7 @@ export function ResortDashboard({
         </aside>
 
         <main className="flex min-w-0 flex-1 flex-col bg-slate-50 lg:ml-72">
-          <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur md:px-6">
+          <header className="dashboard-header sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur md:px-6">
             <div className="mb-4 flex items-center justify-between gap-3 lg:hidden">
               <button
                 type="button"
@@ -1851,28 +1835,21 @@ export function ResortDashboard({
               </button>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
-                  Homely Accounts Manager
+                  StayLedger / Workspace
                 </p>
-                <h1 className="truncate text-lg font-semibold tracking-normal text-slate-950">
-                  Reservations and cash flow
+                <h1 className="dashboard-heading truncate text-2xl text-slate-950">
+                  {navItems.find((item) => item.key === activeModule)?.label}
                 </h1>
               </div>
-              <button
-                type="button"
-                aria-label="Notifications"
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 transition hover:border-slate-300"
-              >
-                <Bell className="h-4 w-4" />
-              </button>
             </div>
 
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="hidden lg:block">
                 <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
-                  Homely Accounts Manager
+                  StayLedger / Workspace
                 </p>
-                <h1 className="mt-1 text-2xl font-semibold tracking-normal text-slate-950 md:text-3xl">
-                  Reservations, guests, and cash flow
+                <h1 className="dashboard-heading mt-2 text-3xl text-slate-950 md:text-4xl">
+                  {navItems.find((item) => item.key === activeModule)?.label}
                 </h1>
               </div>
 
@@ -1880,6 +1857,7 @@ export function ResortDashboard({
                 <label className="relative min-w-0 lg:w-64">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <input
+                    aria-label="Search bookings or guests"
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                     className="h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-800 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
@@ -1889,6 +1867,7 @@ export function ResortDashboard({
 
                 <label className="relative">
                   <select
+                    aria-label="Filter by homestay"
                     value={selectedHomestayId}
                     onChange={(event) =>
                       updateSelectedHomestay(event.target.value)
@@ -1929,13 +1908,14 @@ export function ResortDashboard({
                 <div className="hidden items-center gap-3 lg:flex lg:flex-wrap lg:justify-end">
                   {activeRole === "Admin" && (
                     <>
-                      <Link
-                        href="/bookings"
+                      <button
+                        type="button"
+                        onClick={openQuickBookingModal}
                         className="inline-flex h-10 min-w-36 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800"
                       >
                         <Plus className="h-4 w-4" />
                         New booking
-                      </Link>
+                      </button>
                       <button
                         type="button"
                         onClick={openHomestayForm}
@@ -1955,19 +1935,18 @@ export function ResortDashboard({
                     </>
                   )}
 
-                  <button
-                    type="button"
-                    aria-label="Notifications"
-                    className="grid h-10 w-10 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 transition hover:border-slate-300"
-                  >
-                    <Bell className="h-4 w-4" />
-                  </button>
                 </div>
               </div>
             </div>
           </header>
 
-          <div className="min-w-0 space-y-5 p-4 md:p-6">
+          <div className="dashboard-content min-w-0 space-y-5 p-4 md:p-6">
+            {activeModule === "overview" && (
+              <section className="dashboard-intro">
+                <div><span className="eyebrow">THE BIG PICTURE</span><h2>A little order. A better day.</h2><p>Your stays, your guests, and your business — all feeling a little more at home.</p></div>
+                <Building2 aria-hidden="true" />
+              </section>
+            )}
             {isLoading && (
               <StatusPanel
                 title="Loading Supabase data"
@@ -2417,11 +2396,11 @@ function MetricCard({
   trend: "up" | "down" | "flat";
 }) {
   return (
-    <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <article className="metric-card rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-medium text-slate-500">{label}</p>
-          <p className="mt-2 text-2xl font-semibold tracking-normal text-slate-950">
+          <p className="metric-value mt-2 text-slate-950">
             {value}
           </p>
         </div>
@@ -6630,7 +6609,7 @@ function SidebarAuthCard({
     <section className="mt-4 rounded-md border border-slate-800 bg-slate-900 p-4">
       <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-400">
         <ShieldCheck className="h-4 w-4" />
-        Sign in
+        Your account
       </div>
 
       {email ? (
