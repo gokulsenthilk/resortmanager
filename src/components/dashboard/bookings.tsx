@@ -1,4 +1,6 @@
 import { Filter, Pencil, Plus, X } from "lucide-react";
+import { Picker } from "@/components/ui/picker";
+import { homestayPickerOptions, toOptions } from "@/components/ui/picker-options";
 import { FormEvent, useMemo, useState } from "react";
 import type {
   AccountEntry,
@@ -118,36 +120,20 @@ export function BookingTable({
       {isFilterOpen && (
         <div className="grid gap-3 border-b border-slate-200 bg-slate-50 p-4 md:grid-cols-[180px_180px_minmax(260px,360px)_minmax(0,1fr)_auto] md:items-end">
           <Field label="Status">
-            <select
+            <Picker
+              label="Status"
               value={statusFilter}
-              onChange={(event) =>
-                setStatusFilter(event.target.value as BookingStatus | "all")
-              }
-              className="field-control"
-            >
-              <option value="all">All statuses</option>
-              {(Object.keys(statusLabels) as BookingStatus[]).map((status) => (
-                <option key={status} value={status}>
-                  {statusLabels[status]}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => setStatusFilter(value as BookingStatus | "all")}
+              options={[{ value: "all", label: "All statuses" }, ...toOptions(Object.keys(statusLabels), statusLabels)]}
+            />
           </Field>
           <Field label="Channel">
-            <select
+            <Picker
+              label="Channel"
               value={channelFilter}
-              onChange={(event) =>
-                setChannelFilter(event.target.value as Booking["channel"] | "all")
-              }
-              className="field-control"
-            >
-              <option value="all">All channels</option>
-              {channelOptions.map((channel) => (
-                <option key={channel} value={channel}>
-                  {channel}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => setChannelFilter(value as Booking["channel"] | "all")}
+              options={[{ value: "all", label: "All channels" }, ...toOptions(channelOptions)]}
+            />
           </Field>
           <DateRangeControl
             dateFrom={bookingDateFrom}
@@ -411,25 +397,15 @@ export function QuickBookingForm({
         </div>
 
         <Field label="Homestay">
-          <select
+          <Picker
+            label="Homestay"
+            search
+            placeholder={homestays.length === 0 ? "No homestays found" : "Select homestay"}
             value={form.homestayId}
-            onChange={(event) => {
-              const nextHomestayId = event.target.value;
-
-              onChange({ ...form, homestayId: nextHomestayId, roomId: "" });
-            }}
-            className="field-control"
+            onChange={(value) => onChange({ ...form, homestayId: value, roomId: "" })}
             disabled={homestays.length === 0}
-          >
-            {homestays.length === 0 && (
-              <option value="">No homestays found</option>
-            )}
-            {homestays.map((homestay) => (
-              <option key={homestay.id} value={homestay.id}>
-                {homestay.name}
-              </option>
-            ))}
-          </select>
+            options={homestayPickerOptions(homestays)}
+          />
         </Field>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -457,20 +433,12 @@ export function QuickBookingForm({
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Room">
-            <select
+            <Picker
+              label="Room"
               value={form.roomId}
-              onChange={(event) =>
-                onChange({ ...form, roomId: event.target.value })
-              }
-              className="field-control"
-            >
-              <option value="">No room assigned</option>
-              {rooms.map((room) => (
-                <option key={room.id} value={room.id}>
-                  {room.name}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => onChange({ ...form, roomId: value })}
+              options={[{ value: "", label: "No room assigned" }, ...rooms.map((room) => ({ value: room.id, label: room.name }))]}
+            />
           </Field>
           <Field label="Guests">
             <input
@@ -576,41 +544,23 @@ export function BookingEditFormPanel({
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Homestay">
-            <select
-              value={form.homestayId}
-              onChange={(event) => {
-                const nextHomestayId = event.target.value;
-
-                onChange({ ...form, homestayId: nextHomestayId, roomId: "" });
-              }}
-              className="field-control"
-              disabled={homestays.length === 0}
-            >
-              {homestays.length === 0 && (
-                <option value="">No homestays found</option>
-              )}
-              {homestays.map((homestay) => (
-                <option key={homestay.id} value={homestay.id}>
-                  {homestay.name}
-                </option>
-              ))}
-            </select>
+            <Picker
+            label="Homestay"
+            search
+            placeholder={homestays.length === 0 ? "No homestays found" : "Select homestay"}
+            value={form.homestayId}
+            onChange={(value) => onChange({ ...form, homestayId: value, roomId: "" })}
+            disabled={homestays.length === 0}
+            options={homestayPickerOptions(homestays)}
+          />
           </Field>
           <Field label="Room">
-            <select
+            <Picker
+              label="Room"
               value={form.roomId}
-              onChange={(event) =>
-                onChange({ ...form, roomId: event.target.value })
-              }
-              className="field-control"
-            >
-              <option value="">No room assigned</option>
-              {rooms.map((room) => (
-                <option key={room.id} value={room.id}>
-                  {room.name}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => onChange({ ...form, roomId: value })}
+              options={[{ value: "", label: "No room assigned" }, ...rooms.map((room) => ({ value: room.id, label: room.name }))]}
+            />
           </Field>
         </div>
 
@@ -639,40 +589,20 @@ export function BookingEditFormPanel({
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Status">
-            <select
+            <Picker
+              label="Status"
               value={form.status}
-              onChange={(event) =>
-                onChange({
-                  ...form,
-                  status: event.target.value as BookingStatus,
-                })
-              }
-              className="field-control"
-            >
-              {(Object.keys(statusLabels) as BookingStatus[]).map((status) => (
-                <option key={status} value={status}>
-                  {statusLabels[status]}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => onChange({ ...form, status: value as BookingStatus })}
+              options={toOptions(Object.keys(statusLabels), statusLabels)}
+            />
           </Field>
           <Field label="Channel">
-            <select
+            <Picker
+              label="Channel"
               value={form.channel}
-              onChange={(event) =>
-                onChange({
-                  ...form,
-                  channel: event.target.value as Booking["channel"],
-                })
-              }
-              className="field-control"
-            >
-              {["Direct", "Airbnb", "Booking.com", "Walk-in"].map((channel) => (
-                <option key={channel} value={channel}>
-                  {channel}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => onChange({ ...form, channel: value as Booking["channel"] })}
+              options={toOptions(["Direct", "Airbnb", "Booking.com", "Walk-in"])}
+            />
           </Field>
         </div>
 
@@ -814,40 +744,28 @@ export function BookingLineItemsEditor({
           >
             <div className="min-w-0 lg:col-span-3">
               <Field label="Type">
-                <select
-                  value={item.type}
-                  onChange={(event) =>
-                    updateLineItem(index, {
-                      ...item,
-                      type: event.target.value as BookingLineItemForm["type"],
-                    })
-                  }
-                  className="field-control"
-                >
-                  <option value="income">Income</option>
-                  <option value="expense">Expense</option>
-                </select>
+                <Picker
+              label="Type"
+              value={item.type}
+              onChange={(value) => updateLineItem(index, { ...item, type: value as BookingLineItemForm["type"] })}
+              options={toOptions(["income", "expense"], { income: "Income", expense: "Expense" })}
+            />
               </Field>
             </div>
             <div className="min-w-0 lg:col-span-4">
               <Field label="Category">
-                <select
+                <Picker
+                  label="Category"
                   value={item.category}
-                  onChange={(event) =>
+                  onChange={(value) =>
                     updateLineItem(index, {
                       ...item,
-                      category: event.target.value,
-                      label: defaultBookingEntryLabel(event.target.value),
+                      category: value,
+                      label: defaultBookingEntryLabel(value),
                     })
                   }
-                  className="field-control"
-                >
-                  {bookingEntryCategories.map((category) => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                </select>
+                  options={toOptions(bookingEntryCategories)}
+                />
               </Field>
             </div>
             <div className="min-w-0 sm:col-span-2 lg:col-span-5">
@@ -954,68 +872,45 @@ export function BookingEntryFormPanel({
 
       <form className="mt-5 space-y-4" onSubmit={onSubmit}>
         <Field label="Booking">
-          <select
+          <Picker
+            label="Booking"
+            search
+            placeholder={bookings.length === 0 ? "No bookings found" : "Select booking"}
             value={form.bookingId}
-            onChange={(event) =>
-              onChange({ ...form, bookingId: event.target.value })
-            }
-            className="field-control"
+            onChange={(value) => onChange({ ...form, bookingId: value })}
             disabled={bookings.length === 0}
-          >
-            {bookings.length === 0 && (
-              <option value="">No bookings found</option>
-            )}
-            {bookings.map((booking) => {
-              const customer = customers.find(
-                (item) => item.id === booking.customerId,
-              );
-
-              return (
-                <option key={booking.id} value={booking.id}>
-                  {booking.id.slice(0, 8)} - {customer?.name ?? "Guest"} -{" "}
-                  {formatDate(booking.checkIn)}
-                </option>
-              );
+            options={bookings.map((booking) => {
+              const customer = customers.find((item) => item.id === booking.customerId);
+              return {
+                value: booking.id,
+                label: `${booking.id.slice(0, 8)} - ${customer?.name ?? "Guest"} - ${formatDate(booking.checkIn)}`,
+              };
             })}
-          </select>
+          />
         </Field>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Type">
-            <select
+            <Picker
+              label="Type"
               value={form.type}
-              onChange={(event) =>
-                onChange({
-                  ...form,
-                  type: event.target.value as BookingEntryForm["type"],
-                })
-              }
-              className="field-control"
-            >
-              <option value="income">Income</option>
-              <option value="expense">Expense</option>
-            </select>
+              onChange={(value) => onChange({ ...form, type: value as BookingEntryForm["type"] })}
+              options={toOptions(["income", "expense"], { income: "Income", expense: "Expense" })}
+            />
           </Field>
           <Field label="Category">
-            <select
+            <Picker
+              label="Category"
               value={form.category}
-              onChange={(event) => {
-                const category = event.target.value;
-
+              onChange={(category) =>
                 onChange({
                   ...form,
                   category,
                   label: defaultBookingEntryLabel(category),
-                });
-              }}
-              className="field-control"
-            >
-              {bookingEntryCategories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
+                })
+              }
+              options={toOptions(bookingEntryCategories)}
+            />
           </Field>
         </div>
 
