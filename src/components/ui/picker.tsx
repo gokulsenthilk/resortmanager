@@ -118,8 +118,13 @@ function PickerList<V extends string | number>({ label, value, options, search, 
   const lb = useId();
   const typed = useRef({ s: "", t: 0 });
   const optId = (i: number) => `${lb}-o${i}`;
+  /** Only arrow-key moves scroll the list; scrolling under a finger mid-tap makes the browser drop the tap. */
+  const keyNav = useRef(false);
 
-  useEffect(() => { document.getElementById(optId(active))?.scrollIntoView({ block: "nearest" }); }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!keyNav.current) return; keyNav.current = false;
+    document.getElementById(optId(active))?.scrollIntoView({ block: "nearest" });
+  }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     // Focus search (or the list) on open — the sheet also honours data-autofocus.
     const f = setTimeout(() => root.current?.querySelector<HTMLElement>("[data-autofocus]")?.focus(), desktop ? 0 : 60);
@@ -132,6 +137,7 @@ function PickerList<V extends string | number>({ label, value, options, search, 
 
   const onKey = (e: React.KeyboardEvent) => {
     const n = list.length;
+    if (["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) keyNav.current = true;
     if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => (a + 1) % Math.max(n, 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => (a - 1 + n) % Math.max(n, 1)); }
     else if (e.key === "Home") { e.preventDefault(); setActive(0); }
@@ -147,12 +153,14 @@ function PickerList<V extends string | number>({ label, value, options, search, 
     <ul id={lb} role="listbox" aria-label={label} tabIndex={showSearch ? -1 : 0} data-autofocus={showSearch ? undefined : true}
       aria-activedescendant={!showSearch && list[active] ? optId(active) : undefined} onKeyDown={showSearch ? undefined : onKey}
       data-testid={testId ? `${testId}-list` : undefined}
+      // Keep focus (and the keyboard) on the search box while tapping an option, so the sheet doesn't jump mid-tap.
+      onMouseDown={showSearch ? (e) => e.preventDefault() : undefined}
       className={`outline-none ${desktop ? "min-h-0 flex-1 overflow-y-auto overscroll-contain p-1.5" : "-mx-3"}`}>
       {list.map((o, i) => {
         const selected = o.value === value;
         return (
           <li key={String(o.value)} id={optId(i)} role="option" aria-selected={selected} data-value={String(o.value)} data-active={i === active || undefined}
-            onClick={() => onPick(o.value)} onPointerMove={() => setActive(i)}
+            onClick={() => onPick(o.value)} onPointerMove={(e) => { if (e.pointerType === "mouse") setActive(i); }}
             className={`flex min-h-12 cursor-pointer items-center gap-3 rounded-xl px-3 py-1.5 text-[15px] text-slate-950 ${selected ? "bg-teal-50" : ""} ${i === active ? "ring-2 ring-[#b66243]/70 ring-inset" : ""}`}>
             <Badge o={o} />
             <span className="min-w-0 flex-1">
