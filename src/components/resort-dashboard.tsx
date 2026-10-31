@@ -1,11 +1,12 @@
 "use client";
 
+import { Picker } from "@/components/ui/picker";
+import { homestayPickerOptions } from "@/components/ui/picker-options";
 import Link from "next/link";
 import {
   Building2,
   CalendarDays,
   CalendarCheck,
-  ChevronDown,
   Home,
   IdCard,
   Menu,
@@ -1734,24 +1735,18 @@ export function ResortDashboard({
                   />
                 </label>
 
-                <label className="relative">
-                  <select
-                    aria-label="Filter by homestay"
+                <div className="relative">
+                  <Picker
+                    label="Filter by homestay"
+                    title="Homestay"
+                    search
+                    testId="homestay-filter"
                     value={selectedHomestayId}
-                    onChange={(event) =>
-                      updateSelectedHomestay(event.target.value)
-                    }
-                    className="h-10 w-full appearance-none rounded-md border border-slate-200 bg-white pl-3 pr-9 text-sm font-medium text-slate-800 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100 lg:w-56"
-                  >
-                    <option value="all">All homestays</option>
-                    {homestays.map((homestay) => (
-                      <option key={homestay.id} value={homestay.id}>
-                        {homestay.name}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                </label>
+                    onChange={(value) => updateSelectedHomestay(value)}
+                    options={[{ value: "all", label: "All homestays", sub: `${homestays.length} properties` }, ...homestayPickerOptions(homestays, bookingList)]}
+                    className="lg:w-56"
+                  />
+                </div>
 
                 {activeRole === "Admin" && (
                   <div className="grid grid-cols-2 gap-2 lg:hidden">

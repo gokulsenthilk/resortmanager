@@ -1,4 +1,6 @@
 import { CheckCircle2, Pencil, Plus, Search } from "lucide-react";
+import { Picker } from "@/components/ui/picker";
+import { toOptions } from "@/components/ui/picker-options";
 import { FormEvent, useMemo, useState } from "react";
 import type {
   DashboardData,
@@ -137,21 +139,15 @@ export function StaffPanel({
               />
             </label>
             <Field label="Type">
-              <select
+              <Picker
+                label="Type"
                 value={typeFilter}
-                onChange={(event) => {
-                  setTypeFilter(event.target.value);
+                onChange={(value) => {
+                  setTypeFilter(value);
                   setPage(1);
                 }}
-                className="field-control"
-              >
-                <option value="all">All types</option>
-                {typeOptions.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
+                options={[{ value: "all", label: "All types" }, ...toOptions(typeOptions)]}
+              />
             </Field>
             <Field label="Salary month">
               <input
@@ -768,20 +764,13 @@ export function StaffFormFields({
         />
       </Field>
       <Field label="Employee type">
-        <select
+        <Picker
+          label="Employee type"
           value={form.employeeType}
-          onChange={(event) =>
-            onChange({ ...form, employeeType: event.target.value })
-          }
-          className="field-control"
+          onChange={(value) => onChange({ ...form, employeeType: value })}
           disabled={disabled}
-        >
-          {employeeTypes.map((type) => (
-            <option key={type} value={type}>
-              {type}
-            </option>
-          ))}
-        </select>
+          options={toOptions(employeeTypes)}
+        />
       </Field>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Monthly salary">

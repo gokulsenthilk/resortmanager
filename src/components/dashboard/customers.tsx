@@ -1,4 +1,6 @@
 import { ChevronDown, Filter, Pencil, Plus, Search } from "lucide-react";
+import { Picker } from "@/components/ui/picker";
+import { toOptions } from "@/components/ui/picker-options";
 import { FormEvent, useMemo, useState } from "react";
 import type { DashboardData } from "@/lib/types";
 
@@ -422,21 +424,15 @@ export function CustomerTable({
             />
           </label>
           <Field label="City">
-            <select
+            <Picker
+              label="City"
               value={cityFilter}
-              onChange={(event) => {
-                setCityFilter(event.target.value);
+              onChange={(value) => {
+                setCityFilter(value);
                 setPage(1);
               }}
-              className="field-control"
-            >
-              <option value="all">All cities</option>
-              {cityOptions.map((city) => (
-                <option key={city} value={city}>
-                  {city}
-                </option>
-              ))}
-            </select>
+              options={[{ value: "all", label: "All cities" }, ...toOptions(cityOptions)]}
+            />
           </Field>
         </div>
       </div>

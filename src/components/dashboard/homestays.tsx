@@ -1,4 +1,6 @@
 import { MapPin, Pencil, Plus } from "lucide-react";
+import { Picker } from "@/components/ui/picker";
+import { toOptions } from "@/components/ui/picker-options";
 import { FormEvent } from "react";
 import type { Booking, Homestay, Room } from "@/lib/types";
 
@@ -185,21 +187,13 @@ export function HomestayEditFormPanel({
           />
         </Field>
         <Field label="Status">
-          <select
+          <Picker
+            label="Status"
             value={form.status}
-            onChange={(event) =>
-              onChange({
-                ...form,
-                status: event.target.value as Homestay["status"],
-              })
-            }
-            className="field-control"
+            onChange={(value) => onChange({ ...form, status: value as Homestay["status"] })}
             disabled={disabled}
-          >
-            <option value="active">Active</option>
-            <option value="maintenance">Maintenance</option>
-            <option value="paused">Paused</option>
-          </select>
+            options={toOptions(["active", "maintenance", "paused"], { active: "Active", maintenance: "Maintenance", paused: "Paused" })}
+          />
         </Field>
         <Field label="Nightly rate">
           <input

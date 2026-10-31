@@ -1,4 +1,6 @@
 import { Pencil, Plus, Trash2, X } from "lucide-react";
+import { Picker } from "@/components/ui/picker";
+import { homestayPickerOptions, toOptions } from "@/components/ui/picker-options";
 import { FormEvent } from "react";
 import type { AccountEntry, Homestay } from "@/lib/types";
 
@@ -141,42 +143,32 @@ export function CommonExpensesPanel({
 
         <form className="mt-5 space-y-4" onSubmit={onSubmit}>
           <Field label="Homestay">
-            <select
+            <Picker
+              label="Homestay"
+              search
+              placeholder="Select homestay"
               value={form.homestayId}
-              onChange={(event) =>
-                onChange({ ...form, homestayId: event.target.value })
-              }
-              className="field-control"
+              onChange={(value) => onChange({ ...form, homestayId: value })}
               disabled={disabled || homestays.length === 0}
               required
-            >
-              <option value="">Select homestay</option>
-              {homestays.map((homestay) => (
-                <option key={homestay.id} value={homestay.id}>
-                  {homestay.name}
-                </option>
-              ))}
-            </select>
+              name="homestayId"
+              options={homestayPickerOptions(homestays)}
+            />
           </Field>
           <Field label="Category">
-            <select
+            <Picker
+              label="Category"
               value={form.category}
-              onChange={(event) =>
+              onChange={(value) =>
                 onChange({
                   ...form,
-                  category: event.target.value,
-                  label: defaultCommonExpenseLabel(event.target.value),
+                  category: value,
+                  label: defaultCommonExpenseLabel(value),
                 })
               }
-              className="field-control"
               disabled={disabled}
-            >
-              {commonExpenseCategories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
+              options={toOptions(commonExpenseCategories)}
+            />
           </Field>
           <Field label="Label">
             <input
