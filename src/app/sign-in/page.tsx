@@ -5,8 +5,24 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { Brand } from "@/components/brand";
-import { defaultRouteForRole, resolveUserRole } from "@/lib/authorization";
+import {
+  accessFromRpc,
+  defaultRouteForAccess,
+  legacyAccessFromClaims,
+} from "@/lib/authorization";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import type { User } from "@supabase/supabase-js";
+
+/** Picks the landing page from the database role, falling back to the JWT role. */
+async function landingRouteFor(user: User): Promise<string> {
+  const legacy = legacyAccessFromClaims(user.id, user.app_metadata);
+
+  if (!supabase) return defaultRouteForAccess(legacy);
+
+  const { data, error } = await supabase.rpc("get_my_access");
+
+  return defaultRouteForAccess(error || !data ? legacy : accessFromRpc(data, legacy.ownerId));
+}
 
 export default function SignInPage() {
   const router = useRouter();
@@ -20,7 +36,7 @@ export default function SignInPage() {
     if (!supabase) return;
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) {
-        router.replace(defaultRouteForRole(resolveUserRole(data.session.user.app_metadata?.role)));
+        landingRouteFor(data.session.user).then((route) => router.replace(route));
       }
     });
   }, [router]);
@@ -39,7 +55,7 @@ export default function SignInPage() {
         setError(signInError.message);
         return;
       }
-      router.replace(defaultRouteForRole(resolveUserRole(data.user.app_metadata?.role)));
+      router.replace(await landingRouteFor(data.user));
       router.refresh();
     } catch {
       setError("We couldn’t connect. Please check your connection and try again.");
@@ -88,7 +104,7 @@ export default function SignInPage() {
             </button>
           </form>
           <div className="team-access"><span className="access-line" /><span>MADE FOR YOUR TEAM</span><span className="access-line" /></div>
-          <p className="access-note"><ShieldCheck size={15} /> Secure access for admins and managers</p>
+          <p className="access-note"><ShieldCheck size={15} /> Secure, role-based access for your whole team</p>
           <details className="sign-in-help">
             <summary>Need a hand signing in?</summary>
             <p>Contact your property administrator to request an account or reset your password. Use the email address assigned to your team account.</p>

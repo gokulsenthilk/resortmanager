@@ -8,7 +8,8 @@ export type ModuleKey =
   | "bookings"
   | "calendar"
   | "expenses"
-  | "accounts";
+  | "accounts"
+  | "team";
 
 export type HomestayStatus = "active" | "maintenance" | "paused";
 

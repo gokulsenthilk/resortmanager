@@ -13,7 +13,7 @@ import {
   ShieldCheck,
   UsersRound,
 } from "lucide-react";
-import type { UserRole } from "@/lib/authorization";
+import { roleLabels, type UserRole } from "@/lib/authorization";
 import type { ModuleKey, NavItem } from "@/lib/types";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 
@@ -183,7 +183,7 @@ export function MobileMoreSheet({
         {email ? (
           <>
             <p className="mt-3 truncate text-[15px] font-semibold">{email}</p>
-            <p className="mt-0.5 text-sm text-slate-300">{role}</p>
+            <p className="mt-0.5 text-sm text-slate-300">{roleLabels[role]}</p>
             <button
               type="button"
               onClick={() => {
@@ -234,12 +234,13 @@ export function MobileQuickAddSheet({
 }: {
   open: boolean;
   onClose: () => void;
-  onNewBooking: () => void;
-  onBookingEntry: () => void;
-  onAddHomestay: () => void;
-  onAddCustomer: () => void;
+  /** Omit a handler to hide that action for the current role. */
+  onNewBooking?: () => void;
+  onBookingEntry?: () => void;
+  onAddHomestay?: () => void;
+  onAddCustomer?: () => void;
 }) {
-  const actions = [
+  const allActions = [
     {
       label: "New booking",
       description: "Walk-in, phone or direct enquiry",
@@ -266,6 +267,9 @@ export function MobileQuickAddSheet({
       onSelect: onAddCustomer,
     },
   ];
+  const actions = allActions.flatMap((action) =>
+    action.onSelect ? [{ ...action, onSelect: action.onSelect }] : [],
+  );
 
   return (
     <BottomSheet open={open} onClose={onClose} title="Quick add" testId="mobile-quick-add">

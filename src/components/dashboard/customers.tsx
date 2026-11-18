@@ -352,10 +352,13 @@ export function CustomerTable({
   query,
   customers,
   onEditCustomer,
+  showPricing = true,
 }: {
   query: string;
   customers: DashboardData["customers"];
   onEditCustomer: (customer: DashboardData["customers"][number]) => void;
+  /** False for roles without booking pricing: lifetime value is hidden. */
+  showPricing?: boolean;
 }) {
   const [customerSearch, setCustomerSearch] = useState("");
   const [cityFilter, setCityFilter] = useState("all");
@@ -499,7 +502,7 @@ export function CustomerTable({
               <Stat label="Stays" value={String(customer.stays)} />
               <Stat
                 label="Lifetime value"
-                value={inr.format(customer.lifetimeValue)}
+                value={showPricing ? inr.format(customer.lifetimeValue) : "—"}
               />
             </div>
           </article>
@@ -557,7 +560,7 @@ export function CustomerTable({
                   {customer.stays}
                 </td>
                 <td className="px-4 py-4 text-right font-semibold text-slate-950">
-                  {inr.format(customer.lifetimeValue)}
+                  {showPricing ? inr.format(customer.lifetimeValue) : "—"}
                 </td>
                 <td className="px-4 py-4 text-right">
                   <button

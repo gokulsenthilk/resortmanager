@@ -37,12 +37,18 @@ export function BookingTable({
   homestays,
   accountEntries,
   onEditBooking,
+  showPricing = true,
+  canEdit = true,
 }: {
   bookings: Booking[];
   customers: DashboardData["customers"];
   homestays: Homestay[];
   accountEntries: AccountEntry[];
   onEditBooking: (booking: Booking) => void;
+  /** False for roles without booking pricing: amounts and dues are not rendered. */
+  showPricing?: boolean;
+  /** False for view-only roles (Caretaker). */
+  canEdit?: boolean;
 }) {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<BookingStatus | "all">(
@@ -207,30 +213,42 @@ export function BookingTable({
                 )}
               </div>
               <div className="flex items-end justify-between gap-3">
-                <p className="text-xs text-slate-500">
-                  {booking.guests} guests
-                </p>
-                <div className="text-right">
-                  <p className="font-semibold text-slate-950">
-                    {inr.format(booking.amount)}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {inr.format(booking.amount - booking.paid)} due
-                  </p>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                  <span>{booking.guests} guests</span>
+                  {customer?.phone && (
+                    <a
+                      href={`tel:${customer.phone.replace(/[^\d+]/g, "")}`}
+                      className="inline-flex min-h-11 items-center font-semibold text-teal-800 underline-offset-2 hover:underline"
+                    >
+                      Call {customer.phone}
+                    </a>
+                  )}
                 </div>
+                {showPricing && (
+                  <div className="text-right">
+                    <p className="font-semibold text-slate-950">
+                      {inr.format(booking.amount)}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {inr.format(booking.amount - booking.paid)} due
+                    </p>
+                  </div>
+                )}
               </div>
               <BookingEntryList
                 entries={bookingEntries}
                 netAdjustment={netAdjustment}
               />
-              <button
-                type="button"
-                onClick={() => onEditBooking(booking)}
-                className="inline-flex h-11 lg:h-9 w-full items-center justify-center gap-2 rounded-md border border-slate-200 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
-              >
-                <Pencil className="h-4 w-4" />
-                Edit booking
-              </button>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => onEditBooking(booking)}
+                  className="inline-flex h-11 lg:h-9 w-full items-center justify-center gap-2 rounded-md border border-slate-200 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+                >
+                  <Pencil className="h-4 w-4" />
+                  Edit booking
+                </button>
+              )}
             </article>
           );
         })}
@@ -243,8 +261,12 @@ export function BookingTable({
               <th className="px-4 py-3 font-semibold">Guest</th>
               <th className="px-4 py-3 font-semibold">Stay</th>
               <th className="px-4 py-3 font-semibold">Status</th>
-              <th className="px-4 py-3 text-right font-semibold">Amount</th>
-              <th className="px-4 py-3 text-right font-semibold">Action</th>
+              {showPricing && (
+                <th className="px-4 py-3 text-right font-semibold">Amount</th>
+              )}
+              {canEdit && (
+                <th className="px-4 py-3 text-right font-semibold">Action</th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -293,6 +315,7 @@ export function BookingTable({
                       {statusLabels[booking.status]}
                     </span>
                   </td>
+                  {showPricing && (
                   <td className="px-4 py-4 text-right">
                     <p className="font-semibold text-slate-950">
                       {inr.format(booking.amount)}
@@ -311,6 +334,8 @@ export function BookingTable({
                       {inr.format(booking.amount - booking.paid)} due
                     </p>
                   </td>
+                  )}
+                  {canEdit && (
                   <td className="px-4 py-4 text-right">
                     <button
                       type="button"
@@ -321,6 +346,7 @@ export function BookingTable({
                       Edit
                     </button>
                   </td>
+                  )}
                 </tr>
               );
             })}
@@ -339,10 +365,14 @@ export function QuickBookingForm({
   isSaving,
   saveError,
   variant = "card",
+  showPricing = true,
+  canAddCustomer = true,
   onChange,
   onAddCustomerClick,
   onSubmit,
 }: {
+  showPricing?: boolean;
+  canAddCustomer?: boolean;
   form: BookingForm;
   customers: DashboardData["customers"];
   homestays: Homestay[];
@@ -387,14 +417,16 @@ export function QuickBookingForm({
               selectedCustomerId={form.customerId}
               onSelect={(customerId) => onChange({ ...form, customerId })}
             />
-            <button
-              type="button"
-              onClick={onAddCustomerClick}
-              className="inline-flex h-11 lg:h-10 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 transition hover:border-slate-300"
-            >
-              <Plus className="h-4 w-4" />
-              Add Customer
-            </button>
+            {canAddCustomer && (
+              <button
+                type="button"
+                onClick={onAddCustomerClick}
+                className="inline-flex h-11 lg:h-10 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 transition hover:border-slate-300"
+              >
+                <Plus className="h-4 w-4" />
+                Add Customer
+              </button>
+            )}
           </div>
         </div>
 
@@ -455,30 +487,36 @@ export function QuickBookingForm({
           </Field>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Amount">
-            <input
-              type="number"
-              min="0"
-              value={form.amount}
-              onChange={(event) =>
-                onChange({ ...form, amount: Number(event.target.value) })
-              }
-              className="field-control"
-            />
-          </Field>
-          <Field label="Advance paid">
-            <input
-              type="number"
-              min="0"
-              value={form.paid}
-              onChange={(event) =>
-                onChange({ ...form, paid: Number(event.target.value) })
-              }
-              className="field-control"
-            />
-          </Field>
-        </div>
+        {showPricing ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Amount">
+              <input
+                type="number"
+                min="0"
+                value={form.amount}
+                onChange={(event) =>
+                  onChange({ ...form, amount: Number(event.target.value) })
+                }
+                className="field-control"
+              />
+            </Field>
+            <Field label="Advance paid">
+              <input
+                type="number"
+                min="0"
+                value={form.paid}
+                onChange={(event) =>
+                  onChange({ ...form, paid: Number(event.target.value) })
+                }
+                className="field-control"
+              />
+            </Field>
+          </div>
+        ) : (
+          <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">
+            Pricing is added by the office team. The booking is saved as pending.
+          </p>
+        )}
 
         <button
           type="submit"
@@ -503,9 +541,11 @@ export function BookingEditFormPanel({
   rooms,
   isSaving,
   saveError,
+  showPricing = true,
   onChange,
   onSubmit,
 }: {
+  showPricing?: boolean;
   form: BookingEditForm;
   customers: DashboardData["customers"];
   homestays: Homestay[];
@@ -528,7 +568,9 @@ export function BookingEditFormPanel({
     <section className="min-w-0 bg-white">
       <h2 className="text-base font-semibold text-slate-950">Edit booking</h2>
       <p className="mt-1 break-all text-sm text-slate-500">
-        Update reservation details, payment, status, and amount for {form.bookingId}.
+        {showPricing
+          ? `Update reservation details, payment, status, and amount for ${form.bookingId}.`
+          : `Update reservation details and status for ${form.bookingId}.`}
       </p>
 
       <form className="mt-5 space-y-4" onSubmit={onSubmit}>
@@ -608,7 +650,7 @@ export function BookingEditFormPanel({
           </Field>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className={`grid gap-3 ${showPricing ? "sm:grid-cols-3" : ""}`}>
           <Field label="Guests">
             <input
               type="number"
@@ -620,34 +662,40 @@ export function BookingEditFormPanel({
               className="field-control"
             />
           </Field>
-          <Field label="Amount">
-            <input
-              type="number"
-              min="0"
-              value={form.amount}
-              onChange={(event) =>
-                onChange({ ...form, amount: Number(event.target.value) })
-              }
-              className="field-control"
-            />
-          </Field>
-          <Field label="Paid">
-            <input
-              type="number"
-              min="0"
-              value={form.paid}
-              onChange={(event) =>
-                onChange({ ...form, paid: Number(event.target.value) })
-              }
-              className="field-control"
-            />
-          </Field>
+          {showPricing && (
+            <>
+              <Field label="Amount">
+                <input
+                  type="number"
+                  min="0"
+                  value={form.amount}
+                  onChange={(event) =>
+                    onChange({ ...form, amount: Number(event.target.value) })
+                  }
+                  className="field-control"
+                />
+              </Field>
+              <Field label="Paid">
+                <input
+                  type="number"
+                  min="0"
+                  value={form.paid}
+                  onChange={(event) =>
+                    onChange({ ...form, paid: Number(event.target.value) })
+                  }
+                  className="field-control"
+                />
+              </Field>
+            </>
+          )}
         </div>
 
-        <BookingLineItemsEditor
-          lineItems={form.lineItems}
-          onChange={(lineItems) => onChange({ ...form, lineItems })}
-        />
+        {showPricing && (
+          <BookingLineItemsEditor
+            lineItems={form.lineItems}
+            onChange={(lineItems) => onChange({ ...form, lineItems })}
+          />
+        )}
 
         <button
           type="submit"

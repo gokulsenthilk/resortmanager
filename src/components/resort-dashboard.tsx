@@ -12,6 +12,7 @@ import {
   Plus,
   ReceiptText,
   Search,
+  ShieldCheck,
   UserRound,
   UsersRound,
   WalletCards,
@@ -20,9 +21,9 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Brand } from "@/components/brand";
 import {
   canAccessModule,
-  resolveDataOwnerId,
-  resolveUserRole,
-  type UserRole,
+  hasCapability,
+  type AccessProfile,
+  type Capability,
 } from "@/lib/authorization";
 import {
   createAccountEntry,
@@ -35,6 +36,7 @@ import {
   fetchDashboardData,
   markStaffSalaryPaid,
   markStaffSalaryUnpaid,
+  saveBookingDetails,
   syncBookingAccountEntries,
   updateAccountEntry,
   updateBooking,
@@ -90,6 +92,7 @@ import {
   StaffEditFormPanel,
   StaffSalaryPaymentPanel,
 } from "./dashboard/payroll";
+import { TeamAccessPanel } from "./dashboard/team";
 import {
   inr,
   expenseHistoryPageSize,
@@ -155,6 +158,7 @@ const navItems: NavItem[] = [
   },
   { key: "expenses", label: "Expenses", href: "/expenses", icon: ReceiptText },
   { key: "accounts", label: "Accounts", href: "/accounts", icon: WalletCards },
+  { key: "team", label: "Team & access", href: "/team", icon: ShieldCheck },
 ];
 
 const emptyDashboardData: DashboardData = {
@@ -169,8 +173,13 @@ const emptyDashboardData: DashboardData = {
 
 export function ResortDashboard({
   initialModule = "overview",
+  access,
+  canInviteUsers = false,
 }: {
   initialModule?: ModuleKey;
+  /** Role and property scope, resolved on the server (see requireModuleAccess). */
+  access: AccessProfile;
+  canInviteUsers?: boolean;
 }) {
   const [activeModule, setActiveModule] = useState<ModuleKey>(initialModule);
   const [selectedHomestayId, setSelectedHomestayId] = useState("all");
@@ -199,8 +208,20 @@ export function ResortDashboard({
   const [saveError, setSaveError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [sessionEmail, setSessionEmail] = useState("");
-  const [activeRole, setActiveRole] = useState<UserRole>("Manager");
-  const [userId, setUserId] = useState("");
+  const activeRole = access.role ?? "Caretaker";
+  const userId = access.ownerId;
+  const can = (capability: Capability) => hasCapability(access, capability);
+  const showPricing = can("bookings.pricing");
+  const canManageBookings = can("bookings.manage");
+  const canAddBookingEntries = showPricing && canManageBookings;
+  const canManageProperties = can("properties.manage");
+  const canManageGuests = can("guests.manage");
+  const showRevenue = can("revenue.view");
+  const staffMode = can("staff.salary") ? "full" : can("staff.manage") ? "records" : "directory";
+  const hasQuickAdd = canManageBookings || canManageProperties || canManageGuests;
+  // Without pricing access the bookings table is not readable, so writes go through the
+  // save_booking_details RPC (amounts untouched) instead of insert/update + RETURNING.
+  const writesBookingsWithoutPricing = access.source === "database" && !showPricing;
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [showQuickBookingModal, setShowQuickBookingModal] = useState(false);
@@ -365,7 +386,7 @@ export function ResortDashboard({
     accountEntries,
   } = data;
   const visibleNavItems = navItems.filter((item) =>
-    canAccessModule(activeRole, item.key),
+    canAccessModule(access, item.key),
   );
   const mobileOverflowKeys = splitMobileNav(visibleNavItems).overflow.map(
     (item) => item.key,
@@ -378,30 +399,12 @@ export function ResortDashboard({
 
     supabase.auth.getSession().then(({ data: sessionData }) => {
       setSessionEmail(sessionData.session?.user.email ?? "");
-      setUserId(
-        resolveDataOwnerId(
-          sessionData.session?.user.id,
-          sessionData.session?.user.app_metadata?.owner_id,
-        ),
-      );
-      setActiveRole(
-        resolveUserRole(sessionData.session?.user.app_metadata?.role),
-      );
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSessionEmail(session?.user.email ?? "");
-      setUserId(
-        resolveDataOwnerId(
-          session?.user.id,
-          session?.user.app_metadata?.owner_id,
-        ),
-      );
-      setActiveRole(
-        resolveUserRole(session?.user.app_metadata?.role),
-      );
     });
 
     return () => {
@@ -417,7 +420,7 @@ export function ResortDashboard({
       setLoadError("");
 
       try {
-        const dashboardData = await fetchDashboardData();
+        const dashboardData = await fetchDashboardData(access);
 
         if (!isMounted) {
           return;
@@ -453,10 +456,10 @@ export function ResortDashboard({
     return () => {
       isMounted = false;
     };
-  }, [sessionEmail]);
+  }, [access, sessionEmail]);
 
   useEffect(() => {
-    if (!supabase || activeModule !== "expenses") {
+    if (!supabase || activeModule !== "expenses" || !hasCapability(access, "expenses.enter")) {
       return;
     }
 
@@ -513,6 +516,7 @@ export function ResortDashboard({
       isMounted = false;
     };
   }, [
+    access,
     activeModule,
     expenseDateFrom,
     expenseDateTo,
@@ -674,19 +678,33 @@ export function ResortDashboard({
     setSaveError("");
 
     try {
-      await createBooking({
-        homestayId: bookingForm.homestayId,
-        roomId: bookingForm.roomId || null,
-        customerId: bookingForm.customerId,
-        checkIn: bookingForm.checkIn,
-        checkOut: bookingForm.checkOut,
-        guests: bookingForm.guests,
-        amount: bookingForm.amount,
-        paid: bookingForm.paid,
-        channel: bookingForm.channel,
-      });
+      if (writesBookingsWithoutPricing) {
+        await saveBookingDetails({
+          id: null,
+          homestayId: bookingForm.homestayId,
+          roomId: bookingForm.roomId || null,
+          customerId: bookingForm.customerId,
+          checkIn: bookingForm.checkIn,
+          checkOut: bookingForm.checkOut,
+          guests: bookingForm.guests,
+          status: "pending",
+          channel: bookingForm.channel,
+        });
+      } else {
+        await createBooking({
+          homestayId: bookingForm.homestayId,
+          roomId: bookingForm.roomId || null,
+          customerId: bookingForm.customerId,
+          checkIn: bookingForm.checkIn,
+          checkOut: bookingForm.checkOut,
+          guests: bookingForm.guests,
+          amount: bookingForm.amount,
+          paid: bookingForm.paid,
+          channel: bookingForm.channel,
+        });
+      }
 
-      const refreshedData = await fetchDashboardData();
+      const refreshedData = await fetchDashboardData(access);
 
       setData(refreshedData);
       setBookingForm((current) =>
@@ -722,26 +740,40 @@ export function ResortDashboard({
     setEditBookingSaveError("");
 
     try {
-      await updateBooking({
-        id: bookingEditForm.bookingId,
-        homestayId: bookingEditForm.homestayId,
-        roomId: bookingEditForm.roomId || null,
-        customerId: bookingEditForm.customerId,
-        checkIn: bookingEditForm.checkIn,
-        checkOut: bookingEditForm.checkOut,
-        guests: bookingEditForm.guests,
-        amount: bookingEditForm.amount,
-        paid: bookingEditForm.paid,
-        channel: bookingEditForm.channel,
-        status: bookingEditForm.status,
-      });
-      await syncBookingAccountEntries(
-        bookingEditForm.bookingId,
-        bookingEditForm.homestayId,
-        bookingEditForm.lineItems,
-      );
+      if (writesBookingsWithoutPricing) {
+        await saveBookingDetails({
+          id: bookingEditForm.bookingId,
+          homestayId: bookingEditForm.homestayId,
+          roomId: bookingEditForm.roomId || null,
+          customerId: bookingEditForm.customerId,
+          checkIn: bookingEditForm.checkIn,
+          checkOut: bookingEditForm.checkOut,
+          guests: bookingEditForm.guests,
+          status: bookingEditForm.status,
+          channel: bookingEditForm.channel,
+        });
+      } else {
+        await updateBooking({
+          id: bookingEditForm.bookingId,
+          homestayId: bookingEditForm.homestayId,
+          roomId: bookingEditForm.roomId || null,
+          customerId: bookingEditForm.customerId,
+          checkIn: bookingEditForm.checkIn,
+          checkOut: bookingEditForm.checkOut,
+          guests: bookingEditForm.guests,
+          amount: bookingEditForm.amount,
+          paid: bookingEditForm.paid,
+          channel: bookingEditForm.channel,
+          status: bookingEditForm.status,
+        });
+        await syncBookingAccountEntries(
+          bookingEditForm.bookingId,
+          bookingEditForm.homestayId,
+          bookingEditForm.lineItems,
+        );
+      }
 
-      const refreshedData = await fetchDashboardData();
+      const refreshedData = await fetchDashboardData(access);
 
       setData(refreshedData);
       setBookingForm((current) =>
@@ -793,7 +825,7 @@ export function ResortDashboard({
         rooms: roomsToSave,
       });
 
-      const refreshedData = await fetchDashboardData();
+      const refreshedData = await fetchDashboardData(access);
 
       setData(refreshedData);
       setBookingForm((current) =>
@@ -859,7 +891,7 @@ export function ResortDashboard({
         rooms: roomsToSave,
       });
 
-      const refreshedData = await fetchDashboardData();
+      const refreshedData = await fetchDashboardData(access);
 
       setData(refreshedData);
       setBookingForm((current) =>
@@ -900,7 +932,7 @@ export function ResortDashboard({
         preferences: customerForm.preferences,
       });
 
-      const refreshedData = await fetchDashboardData();
+      const refreshedData = await fetchDashboardData(access);
 
       setData(refreshedData);
       setBookingForm((current) =>
@@ -953,7 +985,7 @@ export function ResortDashboard({
         preferences: customerEditForm.preferences,
       });
 
-      const refreshedData = await fetchDashboardData();
+      const refreshedData = await fetchDashboardData(access);
 
       setData(refreshedData);
       setBookingForm((current) =>
@@ -1004,7 +1036,7 @@ export function ResortDashboard({
         employeeType: staffForm.employeeType,
       });
 
-      const refreshedData = await fetchDashboardData();
+      const refreshedData = await fetchDashboardData(access);
 
       setData(refreshedData);
       setStaffForm(createBlankStaffForm());
@@ -1055,7 +1087,7 @@ export function ResortDashboard({
         isActive: staffEditForm.isActive,
       });
 
-      const refreshedData = await fetchDashboardData();
+      const refreshedData = await fetchDashboardData(access);
 
       setData(refreshedData);
       setShowEditStaffModal(false);
@@ -1145,7 +1177,7 @@ export function ResortDashboard({
         paidOn: staffSalaryPaymentForm.paidOn,
       });
 
-      const refreshedData = await fetchDashboardData();
+      const refreshedData = await fetchDashboardData(access);
 
       setData(refreshedData);
       setShowStaffSalaryPaymentModal(false);
@@ -1201,7 +1233,7 @@ export function ResortDashboard({
         preferences: customerForm.preferences,
       });
 
-      const refreshedData = await fetchDashboardData();
+      const refreshedData = await fetchDashboardData(access);
 
       setData(refreshedData);
       setBookingForm((current) =>
@@ -1259,7 +1291,7 @@ export function ResortDashboard({
         isCleared: bookingEntryForm.isCleared,
       });
 
-      const refreshedData = await fetchDashboardData();
+      const refreshedData = await fetchDashboardData(access);
 
       setData(refreshedData);
       setBookingEntryForm((current) =>
@@ -1328,7 +1360,7 @@ export function ResortDashboard({
         await createAccountEntry(payload);
       }
 
-      const refreshedData = await fetchDashboardData();
+      const refreshedData = await fetchDashboardData(access);
 
       setData(refreshedData);
       setEditingCommonExpenseId("");
@@ -1374,7 +1406,7 @@ export function ResortDashboard({
     try {
       await deleteAccountEntry(expense.id);
 
-      const refreshedData = await fetchDashboardData();
+      const refreshedData = await fetchDashboardData(access);
 
       setData(refreshedData);
       setExpenseHistoryReloadKey((current) => current + 1);
@@ -1651,7 +1683,7 @@ export function ResortDashboard({
                 </h1>
               </div>
 
-              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,46%)] gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,16rem)] lg:flex lg:flex-row lg:flex-wrap lg:items-center lg:justify-end lg:gap-3">
+              <div className={`${activeModule === "team" ? "max-lg:hidden " : ""}grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,46%)] gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,16rem)] lg:flex lg:flex-row lg:flex-wrap lg:items-center lg:justify-end lg:gap-3`}>
                 <label className="relative min-w-0 lg:w-64">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <input
@@ -1672,14 +1704,13 @@ export function ResortDashboard({
                     testId="homestay-filter"
                     value={selectedHomestayId}
                     onChange={(value) => updateSelectedHomestay(value)}
-                    options={[{ value: "all", label: "All homestays", sub: `${homestays.length} properties` }, ...homestayPickerOptions(homestays, bookingList)]}
+                    options={[{ value: "all", label: "All homestays", sub: `${homestays.length} ${homestays.length === 1 ? "property" : "properties"}` }, ...homestayPickerOptions(homestays, bookingList)]}
                     className="lg:w-56"
                   />
                 </div>
 
                 <div className="hidden items-center gap-3 lg:flex lg:flex-wrap lg:justify-end">
-                  {activeRole === "Admin" && (
-                    <>
+                  {canManageBookings && (
                       <button
                         type="button"
                         onClick={openQuickBookingModal}
@@ -1688,6 +1719,8 @@ export function ResortDashboard({
                         <Plus className="h-4 w-4" />
                         New booking
                       </button>
+                  )}
+                  {canManageProperties && (
                       <button
                         type="button"
                         onClick={openHomestayForm}
@@ -1696,6 +1729,8 @@ export function ResortDashboard({
                         <Plus className="h-4 w-4" />
                         Add Homestay
                       </button>
+                  )}
+                  {canManageGuests && (
                       <button
                         type="button"
                         onClick={openCustomerForm}
@@ -1704,7 +1739,6 @@ export function ResortDashboard({
                         <Plus className="h-4 w-4" />
                         Add Customer
                       </button>
-                    </>
                   )}
 
                 </div>
@@ -1737,7 +1771,11 @@ export function ResortDashboard({
             {!isLoading && !loadError && homestays.length === 0 && (
               <StatusPanel
                 title="No homestays found"
-                message="The app is connected to Supabase, but no visible homestay rows were returned. If RLS is enabled, make sure you are signed in as the owner used in the rows."
+                message={
+                  access.allProperties
+                    ? "The app is connected to Supabase, but no visible homestay rows were returned. If RLS is enabled, make sure you are signed in as the owner used in the rows."
+                    : "No properties are assigned to you yet. Ask your admin to assign properties in Team & access."
+                }
               />
             )}
 
@@ -1781,6 +1819,7 @@ export function ResortDashboard({
                 <MetricGrid
                   metrics={metrics}
                   bookings={visibleBookings}
+                  showRevenue={showRevenue}
                 />
               </>
             )}
@@ -1791,12 +1830,15 @@ export function ResortDashboard({
                 accounts={visibleAccounts}
                 customers={customers}
                 homestays={homestays}
+                showPricing={showPricing}
+                showAccounts={showRevenue}
               />
             )}
 
             {activeModule === "bookings" && (
               <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
-                <div className="grid grid-cols-2 gap-2 lg:hidden">
+                {canManageBookings && (
+                <div className={`grid gap-2 lg:hidden ${canAddBookingEntries ? "grid-cols-2" : "grid-cols-1"}`}>
                   <button
                     type="button"
                     onClick={openQuickBookingModal}
@@ -1805,6 +1847,7 @@ export function ResortDashboard({
                     <CalendarCheck className="h-5 w-5" />
                     New booking
                   </button>
+                  {canAddBookingEntries && (
                   <button
                     type="button"
                     onClick={openBookingEntryModal}
@@ -1813,16 +1856,23 @@ export function ResortDashboard({
                     <ReceiptText className="h-5 w-5" />
                     Income / expense
                   </button>
+                  )}
                 </div>
+                )}
                 <BookingTable
                   bookings={visibleBookings}
                   customers={customers}
                   homestays={homestays}
                   accountEntries={accountEntries}
                   onEditBooking={openEditBookingModal}
+                  showPricing={showPricing}
+                  canEdit={canManageBookings}
                 />
+                {canManageBookings && (
                 <div className="hidden space-y-5 lg:block">
                   <QuickBookingForm
+                    showPricing={showPricing}
+                    canAddCustomer={canManageGuests}
                     form={bookingForm}
                     customers={customers}
                     homestays={homestays}
@@ -1836,6 +1886,7 @@ export function ResortDashboard({
                     }}
                     onSubmit={addBooking}
                   />
+                  {canAddBookingEntries && (
                   <BookingEntryFormPanel
                     form={bookingEntryForm}
                     bookings={visibleBookings}
@@ -1845,7 +1896,9 @@ export function ResortDashboard({
                     onChange={setBookingEntryForm}
                     onSubmit={addBookingEntry}
                   />
+                  )}
                 </div>
+                )}
               </div>
             )}
 
@@ -1856,6 +1909,7 @@ export function ResortDashboard({
                 homestays={homestays}
                 month={calendarMonth}
                 onMonthChange={setCalendarMonth}
+                showPricing={showPricing}
               />
             )}
 
@@ -1866,6 +1920,8 @@ export function ResortDashboard({
                 rooms={rooms}
                 bookings={bookingList}
                 onEditHomestay={openEditHomestayModal}
+                showPricing={showPricing}
+                canEdit={canManageProperties}
               />
             )}
 
@@ -1874,11 +1930,13 @@ export function ResortDashboard({
                 query={query}
                 customers={customers}
                 onEditCustomer={openEditCustomerModal}
+                showPricing={showPricing}
               />
             )}
 
             {activeModule === "staff" && (
               <StaffPanel
+                mode={staffMode}
                 form={staffForm}
                 staffMembers={staffMembers}
                 salaryPayments={staffSalaryPayments}
@@ -1918,6 +1976,7 @@ export function ResortDashboard({
                   }}
                 />
                 <CommonExpensesPanel
+                  canManage={can("expenses.manage")}
                   form={commonExpenseForm}
                   homestays={homestays}
                   expenses={commonExpenseHistory}
@@ -1953,6 +2012,15 @@ export function ResortDashboard({
                 totalExpenses={metrics.expenses}
               />
             )}
+
+            {activeModule === "team" && (
+              <TeamAccessPanel
+                homestays={homestays}
+                staffMembers={staffMembers}
+                canInviteUsers={canInviteUsers}
+                migrationApplied={access.source === "database"}
+              />
+            )}
           </div>
         </main>
       </div>
@@ -1975,16 +2043,16 @@ export function ResortDashboard({
         onNavigate={(key) => setActiveModule(key)}
         onSignOut={signOut}
       />
-      {activeRole === "Admin" && (
+      {hasQuickAdd && activeModule !== "team" && (
         <>
           <MobileFab onClick={() => setIsQuickAddOpen(true)} />
           <MobileQuickAddSheet
             open={isQuickAddOpen}
             onClose={() => setIsQuickAddOpen(false)}
-            onNewBooking={openQuickBookingModal}
-            onBookingEntry={openBookingEntryModal}
-            onAddHomestay={openHomestayForm}
-            onAddCustomer={openCustomerForm}
+            onNewBooking={canManageBookings ? openQuickBookingModal : undefined}
+            onBookingEntry={canAddBookingEntries ? openBookingEntryModal : undefined}
+            onAddHomestay={canManageProperties ? openHomestayForm : undefined}
+            onAddCustomer={canManageGuests ? openCustomerForm : undefined}
           />
         </>
       )}
@@ -2014,6 +2082,8 @@ export function ResortDashboard({
             isSaving={isSaving}
             saveError={saveError}
             variant="modal"
+            showPricing={showPricing}
+            canAddCustomer={canManageGuests}
             onChange={setBookingForm}
             onAddCustomerClick={() => {
               setCustomerSaveError("");
@@ -2054,6 +2124,7 @@ export function ResortDashboard({
             rooms={editFormRooms}
             isSaving={isBookingUpdating}
             saveError={editBookingSaveError}
+            showPricing={showPricing}
             onChange={setBookingEditForm}
             onSubmit={saveBookingEdits}
           />

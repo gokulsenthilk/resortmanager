@@ -247,12 +247,16 @@ export function HomestayGrid({
   rooms,
   bookings,
   onEditHomestay,
+  showPricing = true,
+  canEdit = true,
 }: {
   selectedHomestayId: string;
   homestays: Homestay[];
   rooms: Room[];
   bookings: Booking[];
   onEditHomestay: (homestay: Homestay) => void;
+  showPricing?: boolean;
+  canEdit?: boolean;
 }) {
   const visibleHomestays =
     selectedHomestayId === "all"
@@ -268,6 +272,8 @@ export function HomestayGrid({
           rooms={rooms.filter((room) => room.homestayId === homestay.id)}
           bookings={bookings}
           onEditHomestay={onEditHomestay}
+          showPricing={showPricing}
+          canEdit={canEdit}
         />
       ))}
     </section>
@@ -279,11 +285,15 @@ export function HomestayCard({
   rooms,
   bookings,
   onEditHomestay,
+  showPricing = true,
+  canEdit = true,
 }: {
   homestay: Homestay;
   rooms: Room[];
   bookings: Booking[];
   onEditHomestay: (homestay: Homestay) => void;
+  showPricing?: boolean;
+  canEdit?: boolean;
 }) {
   const activeRooms = rooms.filter((room) => room.isActive);
   const homestayBookings = bookings.filter(
@@ -316,6 +326,7 @@ export function HomestayCard({
           >
             {homestay.status}
           </span>
+          {canEdit && (
           <button
             type="button"
             onClick={() => onEditHomestay(homestay)}
@@ -324,13 +335,23 @@ export function HomestayCard({
           >
             <Pencil className="h-4 w-4" />
           </button>
+          )}
         </div>
       </div>
 
       <dl className="mt-5 grid grid-cols-3 gap-3">
         <Stat label="Units" value={String(activeRooms.length || homestay.units)} />
-        <Stat label="Rate" value={inr.format(homestay.nightlyRate)} />
-        <Stat label="Revenue" value={inr.format(revenue)} />
+        {showPricing ? (
+          <>
+            <Stat label="Rate" value={inr.format(homestay.nightlyRate)} />
+            <Stat label="Revenue" value={inr.format(revenue)} />
+          </>
+        ) : (
+          <>
+            <Stat label="Bookings" value={String(homestayBookings.filter((booking) => booking.status !== "cancelled").length)} />
+            <Stat label="Status" value={homestay.status === "active" ? "Open" : "Closed"} />
+          </>
+        )}
       </dl>
 
       <div className="mt-5 border-t border-slate-100 pt-4">

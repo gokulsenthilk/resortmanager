@@ -1,11 +1,12 @@
 import { ShieldX } from "lucide-react";
 import Link from "next/link";
 
-import { requireAuthenticatedRole } from "@/lib/auth-server";
-import { defaultRouteForRole } from "@/lib/authorization";
+import { requireAuthenticatedAccess } from "@/lib/auth-server";
+import { defaultRouteForAccess } from "@/lib/authorization";
 
 export default async function UnauthorizedPage() {
-  const role = await requireAuthenticatedRole();
+  const { access } = await requireAuthenticatedAccess();
+  const isPaused = !access.role;
 
   return (
     <main className="grid min-h-screen place-items-center bg-slate-50 p-4 text-slate-950">
@@ -15,14 +16,18 @@ export default async function UnauthorizedPage() {
         </div>
         <h1 className="mt-5 text-2xl font-semibold">Access restricted</h1>
         <p className="mt-2 text-sm leading-6 text-slate-500">
-          Your account does not have permission to open this section.
+          {isPaused
+            ? "Your team access is paused. Ask your administrator to reactivate it."
+            : "Your account does not have permission to open this section."}
         </p>
+        {!isPaused && (
         <Link
-          href={defaultRouteForRole(role)}
+          href={defaultRouteForAccess(access)}
           className="mt-6 inline-flex h-10 items-center justify-center rounded-md bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-800"
         >
           Return to your dashboard
         </Link>
+        )}
       </section>
     </main>
   );

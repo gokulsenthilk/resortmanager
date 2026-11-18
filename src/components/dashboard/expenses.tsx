@@ -96,7 +96,10 @@ export function CommonExpensesPanel({
   onCancelEdit,
   onDelete,
   onPageChange,
+  canManage = true,
 }: {
+  /** False for roles that may only record new expenses (Caretaker with expense entry). */
+  canManage?: boolean;
   form: CommonExpenseForm;
   homestays: Homestay[];
   expenses: AccountEntry[];
@@ -327,6 +330,7 @@ export function CommonExpensesPanel({
                 <span className="col-start-2 row-start-1 text-right text-[15px] font-semibold text-red-700 md:col-auto md:row-auto md:text-sm">
                   -{inr.format(expense.amount)}
                 </span>
+                {canManage && (
                 <div className="col-span-2 grid grid-cols-2 gap-2 pt-1 md:col-span-1 md:flex md:flex-wrap md:justify-end md:pt-0">
                   <button
                     type="button"
@@ -351,6 +355,7 @@ export function CommonExpensesPanel({
                     {deletingExpenseId === expense.id ? "Deleting" : "Delete"}
                   </button>
                 </div>
+                )}
               </div>
             );
           })}

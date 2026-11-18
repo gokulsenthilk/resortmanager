@@ -3,7 +3,9 @@ import {
   ArrowUpRight,
   BarChart3,
   BedDouble,
+  CalendarCheck,
   CheckCircle2,
+  DoorOpen,
   Clock3,
   ReceiptText,
   WalletCards,
@@ -22,7 +24,10 @@ import { formatDate } from "./utils";
 export function MetricGrid({
   metrics,
   bookings: visibleBookings,
+  showRevenue = true,
 }: {
+  /** False for roles without revenue reports: only operational counts are shown. */
+  showRevenue?: boolean;
   metrics: {
     bookedRevenue: number;
     totalRevenue: number;
@@ -36,6 +41,43 @@ export function MetricGrid({
   };
   bookings: Booking[];
 }) {
+  if (!showRevenue) {
+    const live = visibleBookings.filter((booking) => booking.status !== "cancelled");
+
+    return (
+      <section className="grid min-w-0 grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
+        <MetricCard
+          label="Reservations"
+          value={String(live.length)}
+          detail="Excluding cancelled stays"
+          icon={CalendarCheck}
+          trend="flat"
+        />
+        <MetricCard
+          label="Occupancy"
+          value={`${metrics.occupancy}%`}
+          detail="Confirmed and checked-in units"
+          icon={BedDouble}
+          trend="flat"
+        />
+        <MetricCard
+          label="In house"
+          value={String(live.filter((booking) => booking.status === "checked_in").length)}
+          detail="Guests checked in"
+          icon={DoorOpen}
+          trend="up"
+        />
+        <MetricCard
+          label="Pending"
+          value={String(live.filter((booking) => booking.status === "pending").length)}
+          detail="Awaiting confirmation"
+          icon={Clock3}
+          trend="flat"
+        />
+      </section>
+    );
+  }
+
   return (
     <section className="grid min-w-0 grid-cols-2 gap-3 md:gap-4 xl:grid-cols-5 [&>*:first-child]:col-span-2 md:[&>*:first-child]:col-span-1">
       <MetricCard
@@ -120,11 +162,15 @@ export function OverviewFocus({
   accounts,
   customers,
   homestays,
+  showPricing = true,
+  showAccounts = true,
 }: {
   bookings: Booking[];
   accounts: AccountEntry[];
   customers: DashboardData["customers"];
   homestays: Homestay[];
+  showPricing?: boolean;
+  showAccounts?: boolean;
 }) {
   return (
     <section className="grid min-w-0 gap-5 xl:grid-cols-2">
@@ -165,7 +211,7 @@ export function OverviewFocus({
                   </p>
                 </div>
                 <p className="text-right text-sm font-semibold text-slate-950">
-                  {inr.format(booking.amount)}
+                  {showPricing ? inr.format(booking.amount) : booking.status.replace("_", " ")}
                 </p>
               </div>
             );
@@ -173,6 +219,7 @@ export function OverviewFocus({
         </div>
       </div>
 
+      {showAccounts && (
       <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 p-4">
           <h2 className="text-base font-semibold text-slate-950">
@@ -215,6 +262,7 @@ export function OverviewFocus({
           })}
         </div>
       </div>
+      )}
     </section>
   );
 }
