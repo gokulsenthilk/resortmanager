@@ -199,9 +199,13 @@ body { -webkit-tap-highlight-color: transparent; }
   /* Primary form actions stay in reach while long forms scroll. */
   .sticky-submit { position: sticky; bottom: calc(env(safe-area-inset-bottom) + 12px); z-index: 5; height: 3rem; font-size: 15px; border-radius: 10px; box-shadow: 0 0 0 8px #fff, 0 12px 24px -12px #243d3599; }
   .sticky-actions { position: sticky; bottom: 0; z-index: 5; margin: 0 -16px -16px; padding: 12px 16px calc(env(safe-area-inset-bottom) + 12px); background: #fffefaf7; border-top: 1px solid var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
-  .dashboard-content .sticky-submit { bottom: calc(env(safe-area-inset-bottom) + 76px); }
-  .dashboard-content .sticky-actions { bottom: calc(env(safe-area-inset-bottom) + 58px); margin-bottom: 0; padding-bottom: 12px; }
-  .dashboard-content .mobile-form-screen .sticky-actions { bottom: 0; margin-bottom: -16px; padding-bottom: calc(env(safe-area-inset-bottom) + 12px); }
+  /* Inline page forms (staff, expenses) sit above the tab bar and quick-add button: keep them in flow. */
+  .dashboard-content .sticky-submit { position: static; box-shadow: none; }
+  .dashboard-content .sticky-actions { position: static; margin: 0; padding: 0; background: none; border: 0; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  /* Full-screen forms: pin the action bar to the bottom edge (sticky insets from the scroller's 16px padding). */
+  .dashboard-content .mobile-form-screen .sticky-actions { position: sticky; bottom: -16px; margin: 0 -16px -16px; padding: 12px 16px calc(env(safe-area-inset-bottom) + 12px); background: #fffefaf7; border-top: 1px solid var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+  /* Keep dialog titles and intros clear of the floating close button. */
+  .dashboard-modal-panel > .w-full > * > :is(h2, h3):first-of-type, .dashboard-modal-panel > .w-full > * > :is(h2, h3):first-of-type + p { padding-right: 3.25rem; }
   /* "Add homestay" / "Add customer" open as full-screen forms on phones. */
   .mobile-form-screen { position: fixed; inset: 0; z-index: 60; margin: 0 !important; overflow-y: auto; overscroll-behavior: contain; border: 0 !important; border-radius: 0 !important; padding: calc(env(safe-area-inset-top) + 16px) 16px 16px !important; animation: sheet-up 260ms cubic-bezier(.22,1,.36,1) both; }
   .mobile-form-screen .mobile-form-header { position: sticky; top: calc(-1 * (env(safe-area-inset-top) + 16px)); z-index: 6; margin: calc(-1 * (env(safe-area-inset-top) + 16px)) -16px 0; padding: calc(env(safe-area-inset-top) + 16px) 16px 12px; background: #fff; border-bottom: 1px solid var(--line); }
