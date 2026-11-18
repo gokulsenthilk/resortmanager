@@ -15,6 +15,27 @@ function watchPops() {
   if (popWatch || typeof window === "undefined") return; popWatch = true;
   window.addEventListener("popstate", (e) => { const ev = e as PopStateEvent & { __self?: boolean }; ev.__self = selfPops > 0; if (ev.__self) selfPops--; });
 }
+/**
+ * The visible area above the on-screen keyboard. Chrome on Android (and iOS Safari) overlay the
+ * keyboard on a `position: fixed` layer instead of shrinking it, so without this the bottom of the
+ * sheet — the option list — ends up hidden behind the keyboard.
+ */
+function useVisualViewport(active: boolean) {
+  const [box, setBox] = useState<{ top: number; height: number } | null>(null);
+  useEffect(() => {
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    if (!active || !vv) return;
+    const update = () => {
+      const full = Math.abs(window.innerHeight - vv.height) < 1 && vv.offsetTop < 1;
+      setBox(full ? null : { top: vv.offsetTop, height: vv.height });
+    };
+    update();
+    vv.addEventListener("resize", update); vv.addEventListener("scroll", update);
+    return () => { vv.removeEventListener("resize", update); vv.removeEventListener("scroll", update); setBox(null); };
+  }, [active]);
+  return box;
+}
+
 const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select,textarea,[tabindex]:not([tabindex="-1"])';
 
 /**
@@ -42,6 +63,7 @@ export function BottomSheet({ open, onClose, title, children, footer, testId, ro
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
   const [dragging, setDragging] = useState(false);
   const titleId = useId();
+  const vv = useVisualViewport(mounted);
 
   // Mount → next frame slide in; close → slide out then unmount (state adjusted during render).
   if (open && !mounted) setMounted(true);
@@ -109,7 +131,8 @@ export function BottomSheet({ open, onClose, title, children, footer, testId, ro
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-6" data-testid={testId ? `${testId}-root` : undefined}>
+    <div className="fixed inset-x-0 top-0 z-[100] flex h-full items-end justify-center sm:items-center sm:p-6" data-testid={testId ? `${testId}-root` : undefined}
+      style={vv ? { top: vv.top, height: vv.height } : undefined}>
       <div
         aria-hidden
         data-testid="sheet-backdrop"
@@ -124,7 +147,7 @@ export function BottomSheet({ open, onClose, title, children, footer, testId, ro
         tabIndex={-1}
         data-testid={testId}
         data-state={shown ? "open" : "closed"}
-        style={{ transform: shown ? `translateY(${drag}px)` : undefined, transitionDuration: dragging ? "0ms" : undefined }}
+        style={{ transform: shown ? `translateY(${drag}px)` : undefined, transitionDuration: dragging ? "0ms" : undefined, maxHeight: vv ? Math.round(vv.height * 0.92) : undefined }}
         className={`relative flex max-h-[90dvh] w-full max-w-md flex-col rounded-t-[28px] bg-white text-slate-900 shadow-[0_-12px_40px_-12px_rgba(0,0,0,0.35)] outline-none transition-[transform,opacity] duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none sm:max-w-lg sm:rounded-[28px] ${shown ? "" : "translate-y-full opacity-0 sm:translate-y-6"}`}
       >
         <div className="shrink-0 touch-none select-none" {...dragHandlers}>
