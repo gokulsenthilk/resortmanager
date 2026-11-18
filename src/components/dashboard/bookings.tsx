@@ -1,4 +1,4 @@
-import { Filter, Pencil, Plus, X } from "lucide-react";
+import { CalendarDays, Filter, Pencil, Plus, X } from "lucide-react";
 import { Picker } from "@/components/ui/picker";
 import { homestayPickerOptions, toOptions } from "@/components/ui/picker-options";
 import { FormEvent, useMemo, useState } from "react";
@@ -106,7 +106,7 @@ export function BookingTable({
         <button
           type="button"
           onClick={() => setIsFilterOpen((current) => !current)}
-          className={`inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium transition ${
+          className={`inline-flex h-11 lg:h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium transition ${
             hasBookingFilter
               ? "border-teal-200 bg-teal-50 text-teal-800"
               : "border-slate-200 text-slate-700 hover:border-slate-300"
@@ -149,7 +149,7 @@ export function BookingTable({
             type="button"
             onClick={clearBookingFilters}
             disabled={!hasBookingFilter}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+            className="inline-flex h-11 lg:h-10 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
           >
             <X className="h-4 w-4" />
             Clear
@@ -176,7 +176,7 @@ export function BookingTable({
           const netAdjustment = getEntryNet(bookingEntries);
 
           return (
-            <article key={booking.id} className="space-y-3 p-4">
+            <article key={booking.id} className="space-y-3 p-4 active:bg-slate-50">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="flex flex-wrap items-center gap-2 font-semibold text-slate-950">
@@ -195,14 +195,16 @@ export function BookingTable({
                   {statusLabels[booking.status]}
                 </span>
               </div>
-              <div>
-                <p className="text-sm font-medium text-slate-900">
-                  {booking.room}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  {homestay?.name} - {formatDate(booking.checkIn)} to{" "}
-                  {formatDate(booking.checkOut)}
-                </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-sm font-medium text-slate-800">
+                  <CalendarDays className="h-4 w-4 text-teal-700" aria-hidden="true" />
+                  {formatDate(booking.checkIn)} – {formatDate(booking.checkOut)}
+                </span>
+                {booking.room && (
+                  <span className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-slate-700">
+                    {booking.room}
+                  </span>
+                )}
               </div>
               <div className="flex items-end justify-between gap-3">
                 <p className="text-xs text-slate-500">
@@ -224,7 +226,7 @@ export function BookingTable({
               <button
                 type="button"
                 onClick={() => onEditBooking(booking)}
-                className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-slate-200 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+                className="inline-flex h-11 lg:h-9 w-full items-center justify-center gap-2 rounded-md border border-slate-200 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
               >
                 <Pencil className="h-4 w-4" />
                 Edit booking
@@ -313,7 +315,7 @@ export function BookingTable({
                     <button
                       type="button"
                       onClick={() => onEditBooking(booking)}
-                      className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+                      className="inline-flex h-11 lg:h-9 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
                     >
                       <Pencil className="h-4 w-4" />
                       Edit
@@ -388,7 +390,7 @@ export function QuickBookingForm({
             <button
               type="button"
               onClick={onAddCustomerClick}
-              className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 transition hover:border-slate-300"
+              className="inline-flex h-11 lg:h-10 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 transition hover:border-slate-300"
             >
               <Plus className="h-4 w-4" />
               Add Customer
@@ -481,7 +483,7 @@ export function QuickBookingForm({
         <button
           type="submit"
           disabled={!canSubmit}
-          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+          className="sticky-submit inline-flex h-11 lg:h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
         >
           <Plus className="h-4 w-4" />
           {isSaving ? "Saving" : "Save booking"}
@@ -650,7 +652,7 @@ export function BookingEditFormPanel({
         <button
           type="submit"
           disabled={!canSubmit}
-          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+          className="sticky-submit inline-flex h-11 lg:h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
         >
           <Pencil className="h-4 w-4" />
           {isSaving ? "Saving changes" : "Update booking"}
@@ -723,7 +725,7 @@ export function BookingLineItemsEditor({
           <button
             type="button"
             onClick={addLineItem}
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+            className="inline-flex h-11 lg:h-9 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
           >
             <Plus className="h-4 w-4" />
             Add item
@@ -798,7 +800,7 @@ export function BookingLineItemsEditor({
                 />
               </Field>
             </div>
-            <label className="flex h-10 min-w-0 items-center gap-2 self-end rounded-md border border-slate-200 px-3 text-sm font-medium text-slate-700 lg:col-span-4">
+            <label className="flex h-11 lg:h-10 min-w-0 items-center gap-2 self-end rounded-md border border-slate-200 px-3 text-sm font-medium text-slate-700 lg:col-span-4">
               <input
                 type="checkbox"
                 checked={item.isCleared}
@@ -815,7 +817,7 @@ export function BookingLineItemsEditor({
             <button
               type="button"
               onClick={() => removeLineItem(index)}
-              className="inline-flex h-10 min-w-0 items-center justify-center gap-2 self-end rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 lg:col-span-4"
+              className="inline-flex h-11 lg:h-10 min-w-0 items-center justify-center gap-2 self-end rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 lg:col-span-4"
             >
               <X className="h-4 w-4" />
               Remove
@@ -938,7 +940,7 @@ export function BookingEntryFormPanel({
               required
             />
           </Field>
-          <label className="flex h-10 items-center gap-2 self-end rounded-md border border-slate-200 px-3 text-sm font-medium text-slate-700">
+          <label className="flex h-11 lg:h-10 items-center gap-2 self-end rounded-md border border-slate-200 px-3 text-sm font-medium text-slate-700">
             <input
               type="checkbox"
               checked={form.isCleared}
@@ -954,7 +956,7 @@ export function BookingEntryFormPanel({
         <button
           type="submit"
           disabled={!canSubmit}
-          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+          className="sticky-submit inline-flex h-11 lg:h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
         >
           <Plus className="h-4 w-4" />
           {isSaving ? "Saving item" : "Add to booking"}

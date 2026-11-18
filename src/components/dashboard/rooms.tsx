@@ -42,7 +42,7 @@ export function RoomListEditor({
           type="button"
           onClick={addRoom}
           disabled={disabled}
-          className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+          className="inline-flex h-11 lg:h-9 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
         >
           <Plus className="h-4 w-4" />
           Add room
@@ -102,7 +102,7 @@ export function RoomListEditor({
               type="button"
               onClick={() => removeRoom(index)}
               disabled={disabled || rooms.length === 1}
-              className="inline-flex h-10 items-center justify-center gap-2 self-end rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+              className="inline-flex h-11 lg:h-10 items-center justify-center gap-2 self-end rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
             >
               <X className="h-4 w-4" />
               Remove

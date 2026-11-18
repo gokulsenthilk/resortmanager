@@ -7,7 +7,7 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import type { UserRole } from "@/lib/authorization";
 
 import {
@@ -36,15 +36,15 @@ export function DateFilterBar({
   const hasFilter = Boolean(dateFrom || dateTo);
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
+        <div className="hidden sm:block">
           <h2 className="text-base font-semibold text-slate-950">
             Date filter
           </h2>
-          <p className="mt-1 text-sm text-slate-500">{description}</p>
+          <p className="mt-1 hidden text-sm text-slate-500 sm:block">{description}</p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-[minmax(260px,360px)_auto]">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:grid-cols-[minmax(260px,360px)_auto] sm:gap-3">
           <DateRangeControl
             dateFrom={dateFrom}
             dateTo={dateTo}
@@ -58,7 +58,7 @@ export function DateFilterBar({
               onClear();
             }}
             disabled={!hasFilter}
-            className="inline-flex h-10 items-center justify-center gap-2 self-end rounded-md border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+            className="inline-flex h-11 lg:h-10 items-center justify-center gap-2 self-end rounded-md border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
           >
             <Filter className="h-4 w-4" />
             Clear
@@ -99,7 +99,7 @@ export function DateRangeControl({
         type="button"
         onClick={() => setIsRangeOpen((current) => !current)}
         aria-expanded={isRangeOpen}
-        className="inline-flex h-10 w-full items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 text-left text-sm font-semibold text-slate-800 transition hover:border-teal-300"
+        className="inline-flex h-11 lg:h-10 w-full items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 text-left text-sm font-semibold text-slate-800 transition hover:border-teal-300"
       >
         <span className="inline-flex min-w-0 items-center gap-2">
           <CalendarDays className="h-4 w-4 shrink-0 text-teal-700" />
@@ -201,7 +201,7 @@ export function DashboardModal({
       aria-label={ariaLabel}
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 grid place-items-end bg-slate-950/40 p-0 sm:place-items-center sm:p-4"
+      className="fixed inset-0 z-50 grid place-items-end bg-slate-950/45 p-0 sm:place-items-center sm:p-4"
     >
       <button
         type="button"
@@ -209,15 +209,18 @@ export function DashboardModal({
         className="absolute inset-0"
         onClick={onClose}
       />
-      <div className="relative max-h-[92vh] w-full overflow-y-auto rounded-t-lg border border-slate-200 bg-white p-4 sm:max-w-2xl sm:rounded-lg">
-        <button
-          type="button"
-          aria-label="Close popup"
-          onClick={onClose}
-          className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 transition hover:border-slate-300"
-        >
-          <X className="h-4 w-4" />
-        </button>
+      <div className="dashboard-modal-panel relative max-h-[92dvh] w-full overflow-y-auto overscroll-contain rounded-t-[24px] border border-slate-200 bg-white px-4 pt-2 shadow-[0_-12px_40px_-12px_rgba(0,0,0,0.35)] sm:max-w-2xl sm:rounded-lg sm:pt-4 sm:shadow-xl">
+        <div aria-hidden="true" className="mx-auto mb-2 h-1 w-10 rounded-full bg-slate-300 sm:hidden" />
+        <div className="sticky top-0 z-10 -mb-11 flex justify-end sm:-mb-9">
+          <button
+            type="button"
+            aria-label="Close popup"
+            onClick={onClose}
+            className="grid h-11 w-11 place-items-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-slate-300 sm:h-9 sm:w-9 sm:rounded-md sm:shadow-none"
+          >
+            <X className="h-5 w-5 sm:h-4 sm:w-4" />
+          </button>
+        </div>
         <div className="w-full">{children}</div>
       </div>
     </div>
@@ -278,7 +281,7 @@ export function SidebarAuthCard({
           <button
             type="button"
             onClick={onSignOut}
-            className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-slate-700 px-3 text-sm font-semibold text-slate-200 transition hover:border-slate-500"
+            className="inline-flex h-11 lg:h-9 w-full items-center justify-center gap-2 rounded-md border border-slate-700 px-3 text-sm font-semibold text-slate-200 transition hover:border-slate-500"
           >
             <LogOut className="h-4 w-4" />
             Sign out
@@ -293,7 +296,7 @@ export function SidebarAuthCard({
           </p>
           <Link
             href="/sign-in"
-            className="inline-flex h-9 w-full items-center justify-center rounded-md bg-teal-400 px-3 text-sm font-semibold text-slate-950 transition hover:bg-teal-300"
+            className="inline-flex h-11 lg:h-9 w-full items-center justify-center rounded-md bg-teal-400 px-3 text-sm font-semibold text-slate-950 transition hover:bg-teal-300"
           >
             Open sign-in page
           </Link>
@@ -331,6 +334,64 @@ export function Stat({ label, value }: { label: string; value: string }) {
       <dd className="mt-1 truncate text-sm font-semibold text-slate-950">
         {value}
       </dd>
+    </div>
+  );
+}
+
+/**
+ * Long inline forms (add staff, add expense) collapse behind one big button on phones so the
+ * list the user came for is visible first. On large screens the form is always shown.
+ */
+export function MobileCollapsible({
+  label,
+  icon,
+  forceOpen = false,
+  className = "",
+  children,
+}: {
+  label: string;
+  icon?: ReactNode;
+  forceOpen?: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const expanded = isOpen || forceOpen;
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Editing an item further down the list opens the form; bring it into view on phones.
+  useEffect(() => {
+    if (
+      forceOpen &&
+      containerRef.current &&
+      window.matchMedia("(max-width: 1023px)").matches
+    ) {
+      containerRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [forceOpen]);
+
+  return (
+    <div ref={containerRef} className={`min-w-0 scroll-mt-40 ${className}`}>
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={() => setIsOpen((current) => !current)}
+        className={`flex h-14 w-full items-center justify-between gap-3 rounded-xl border px-4 text-left text-[15px] font-semibold transition lg:hidden ${
+          expanded
+            ? "mb-3 border-slate-200 bg-white text-slate-700"
+            : "border-teal-700 bg-teal-700 text-white"
+        }`}
+      >
+        <span className="inline-flex items-center gap-3">
+          {icon}
+          {label}
+        </span>
+        <ChevronDown
+          className={`h-5 w-5 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
+          aria-hidden="true"
+        />
+      </button>
+      <div className={expanded ? "" : "hidden lg:block"}>{children}</div>
     </div>
   );
 }

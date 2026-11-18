@@ -1,4 +1,4 @@
-import { CheckCircle2, Copy } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Copy, Phone } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { Booking, DashboardData, Homestay } from "@/lib/types";
 
@@ -29,7 +29,16 @@ export function BookingsCalendarView({
   onMonthChange: (month: string) => void;
 }) {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [mobileDay, setMobileDay] = useState("");
   const days = buildCalendarDays(month);
+  const monthDays = days.filter((day) => day.inMonth);
+  // Phones show one day's stays under a compact month grid: keep the picked day if it is
+  // visible, otherwise today (when in this month) or the 1st.
+  const activeMobileDay = days.some((day) => day.date === mobileDay)
+    ? mobileDay
+    : monthDays.find((day) => day.date === todayIso())?.date ??
+      monthDays[0]?.date ??
+      days[0].date;
   const monthBookings = bookings.filter((booking) =>
     doesStayOverlapRange(
       booking.checkIn,
@@ -37,6 +46,9 @@ export function BookingsCalendarView({
       `${month}-01`,
       days[days.length - 1].date,
     ),
+  );
+  const mobileDayBookings = monthBookings.filter((booking) =>
+    isBookingOnCalendarDay(booking, activeMobileDay),
   );
 
   return (
@@ -50,28 +62,35 @@ export function BookingsCalendarView({
             Month view of occupied nights across selected homestays.
           </p>
         </div>
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 sm:flex">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-2 sm:flex">
           <button
             type="button"
+            aria-label="Previous month"
             onClick={() => onMonthChange(shiftMonth(month, -1))}
-            className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+            className="inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-md border border-slate-200 px-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 lg:h-9 lg:px-3"
           >
-            Prev
+            <ChevronLeft className="h-5 w-5 sm:hidden" aria-hidden="true" />
+            <span className="hidden sm:inline">Prev</span>
           </button>
-          <div className="min-w-36 rounded-md border border-slate-200 px-3 py-2 text-center text-sm font-semibold text-slate-950">
+          <div className="min-w-0 truncate rounded-md border border-slate-200 px-3 py-2.5 text-center text-[15px] font-semibold text-slate-950 sm:min-w-36 sm:py-2 sm:text-sm">
             {formatMonthLabel(month)}
           </div>
           <button
             type="button"
+            aria-label="Next month"
             onClick={() => onMonthChange(shiftMonth(month, 1))}
-            className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+            className="inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-md border border-slate-200 px-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 lg:h-9 lg:px-3"
           >
-            Next
+            <ChevronRight className="h-5 w-5 sm:hidden" aria-hidden="true" />
+            <span className="hidden sm:inline">Next</span>
           </button>
           <button
             type="button"
-            onClick={() => onMonthChange(todayMonth())}
-            className="col-span-3 inline-flex h-9 items-center justify-center rounded-md bg-slate-950 px-3 text-sm font-semibold text-white transition hover:bg-slate-800 sm:col-auto"
+            onClick={() => {
+              onMonthChange(todayMonth());
+              setMobileDay(todayIso());
+            }}
+            className="inline-flex h-11 items-center justify-center rounded-md bg-slate-950 px-3 text-sm font-semibold text-white transition hover:bg-slate-800 lg:h-9"
           >
             Today
           </button>
@@ -145,55 +164,88 @@ export function BookingsCalendarView({
         </div>
       </div>
 
-      <div className="divide-y divide-slate-100 md:hidden">
-        {days
-          .filter((day) => day.inMonth)
-          .map((day) => {
-            const dayBookings = monthBookings.filter((booking) =>
+      <div className="md:hidden">
+        <div className="grid grid-cols-7 px-2 pt-3 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => (
+            <div key={`${day}-${index}`} className="py-1">
+              {day}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-1 px-2 pb-3" role="grid" aria-label={formatMonthLabel(month)}>
+          {days.map((day) => {
+            const count = monthBookings.filter((booking) =>
               isBookingOnCalendarDay(booking, day.date),
-            );
+            ).length;
+            const isSelected = day.date === activeMobileDay;
+            const isToday = day.date === todayIso();
 
             return (
-              <div key={day.date} className="p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-950">
-                      {formatDate(day.date)}
-                    </p>
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      {dayBookings.length} bookings
-                    </p>
-                  </div>
-                  {day.date === todayIso() && (
-                    <span className="rounded-md bg-teal-50 px-2 py-1 text-xs font-semibold text-teal-700">
-                      Today
-                    </span>
-                  )}
-                </div>
-                <div className="mt-3 space-y-2">
-                  {dayBookings.length === 0 && (
-                    <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-500">
-                      No bookings.
-                    </p>
-                  )}
-                  {dayBookings.map((booking) => (
-                    <CalendarBookingChip
-                      key={booking.id}
-                      booking={booking}
-                      customer={customers.find(
-                        (item) => item.id === booking.customerId,
-                      )}
-                      homestay={homestays.find(
-                        (item) => item.id === booking.homestayId,
-                      )}
-                      onClick={() => setSelectedBooking(booking)}
-                      roomy
+              <button
+                key={day.date}
+                type="button"
+                role="gridcell"
+                aria-selected={isSelected}
+                aria-label={`${formatDate(day.date)}, ${count} ${count === 1 ? "booking" : "bookings"}`}
+                onClick={() => setMobileDay(day.date)}
+                className={`relative flex h-12 flex-col items-center justify-center rounded-xl text-[15px] font-semibold transition ${
+                  isSelected
+                    ? "bg-slate-950 text-white"
+                    : isToday
+                      ? "bg-teal-50 text-teal-800 ring-1 ring-teal-300"
+                      : day.inMonth
+                        ? "text-slate-800 active:bg-slate-100"
+                        : "text-slate-300"
+                }`}
+              >
+                {day.dayNumber}
+                <span className="mt-0.5 flex h-1.5 items-center gap-0.5" aria-hidden="true">
+                  {Array.from({ length: Math.min(count, 3) }).map((_, index) => (
+                    <span
+                      key={index}
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        isSelected ? "bg-teal-300" : "bg-[#b66243]"
+                      }`}
                     />
                   ))}
-                </div>
-              </div>
+                </span>
+              </button>
             );
           })}
+        </div>
+
+        <div className="border-t border-slate-200 bg-slate-50 p-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <h3 className="font-[family-name:var(--font-editorial)] text-xl text-slate-950">
+              {formatDate(activeMobileDay)}
+            </h3>
+            <span className="text-sm text-slate-500">
+              {mobileDayBookings.length}{" "}
+              {mobileDayBookings.length === 1 ? "booking" : "bookings"}
+            </span>
+          </div>
+          <div className="mt-3 space-y-2">
+            {mobileDayBookings.length === 0 && (
+              <p className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-5 text-center text-sm text-slate-500">
+                No stays on this day.
+              </p>
+            )}
+            {mobileDayBookings.map((booking) => (
+              <CalendarBookingChip
+                key={booking.id}
+                booking={booking}
+                customer={customers.find(
+                  (item) => item.id === booking.customerId,
+                )}
+                homestay={homestays.find(
+                  (item) => item.id === booking.homestayId,
+                )}
+                onClick={() => setSelectedBooking(booking)}
+                roomy
+              />
+            ))}
+          </div>
+        </div>
       </div>
 
       {selectedBooking && (
@@ -306,10 +358,20 @@ export function CalendarBookingDetails({
           {phone || "Mobile number not recorded"}
         </p>
         {phone && (
+          <a
+            href={`tel:${phone.replace(/[^\d+]/g, "")}`}
+            className="inline-flex h-11 items-center gap-1.5 rounded-md bg-teal-700 px-3 text-sm font-semibold text-white transition hover:bg-teal-800 lg:h-8 lg:px-2.5 lg:text-xs"
+            aria-label={`Call ${phone}`}
+          >
+            <Phone className="h-4 w-4 lg:h-3.5 lg:w-3.5" />
+            Call
+          </a>
+        )}
+        {phone && (
           <button
             type="button"
             onClick={copyMobileNumber}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 transition hover:border-teal-300 hover:bg-teal-50 hover:text-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
+            className="inline-flex h-11 lg:h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 transition hover:border-teal-300 hover:bg-teal-50 hover:text-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
             aria-label={`Copy mobile number ${phone}`}
           >
             {copyStatus === "copied" ? (

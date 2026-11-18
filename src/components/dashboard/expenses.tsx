@@ -5,7 +5,7 @@ import { FormEvent } from "react";
 import type { AccountEntry, Homestay } from "@/lib/types";
 
 import { inr, commonExpenseCategories, type CommonExpenseForm } from "./shared";
-import { EmptyState, Field } from "./ui";
+import { EmptyState, Field, MobileCollapsible } from "./ui";
 import { formatDate, defaultCommonExpenseLabel } from "./utils";
 
 export function DeleteExpenseConfirm({
@@ -55,7 +55,7 @@ export function DeleteExpenseConfirm({
           type="button"
           onClick={onCancel}
           disabled={isDeleting}
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+          className="inline-flex h-11 lg:h-10 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
         >
           <X className="h-4 w-4" />
           Cancel
@@ -64,7 +64,7 @@ export function DeleteExpenseConfirm({
           type="button"
           onClick={onConfirm}
           disabled={isDeleting}
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-red-700 text-sm font-semibold text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-red-300"
+          className="inline-flex h-11 lg:h-10 items-center justify-center gap-2 rounded-md bg-red-700 text-sm font-semibold text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-red-300"
         >
           <Trash2 className="h-4 w-4" />
           {isDeleting ? "Deleting expense" : "Delete expense"}
@@ -133,6 +133,11 @@ export function CommonExpensesPanel({
 
   return (
     <section className="grid min-w-0 gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
+      <MobileCollapsible
+        label={editingExpenseId ? "Edit expense" : "Add expense"}
+        icon={<Plus className="h-5 w-5" aria-hidden="true" />}
+        forceOpen={Boolean(editingExpenseId)}
+      >
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <h2 className="text-base font-semibold text-slate-950">
           Common expenses
@@ -208,7 +213,7 @@ export function CommonExpensesPanel({
               />
             </Field>
           </div>
-          <label className="flex h-10 items-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-medium text-slate-700">
+          <label className="flex h-11 lg:h-10 items-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-medium text-slate-700">
             <input
               type="checkbox"
               checked={form.isCleared}
@@ -220,11 +225,11 @@ export function CommonExpensesPanel({
             />
             Paid / cleared
           </label>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="sticky-actions grid gap-2 sm:grid-cols-2">
             <button
               type="submit"
               disabled={disabled || !canSubmit}
-              className={`inline-flex h-10 items-center justify-center gap-2 rounded-md text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:bg-slate-300 ${
+              className={`inline-flex h-12 lg:h-10 items-center justify-center gap-2 rounded-md text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:bg-slate-300 ${
                 editingExpenseId
                   ? "bg-teal-700 hover:bg-teal-800"
                   : "bg-slate-950 hover:bg-slate-800"
@@ -246,7 +251,7 @@ export function CommonExpensesPanel({
                 type="button"
                 onClick={onCancelEdit}
                 disabled={disabled || isSaving}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+                className="inline-flex h-11 lg:h-10 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
               >
                 <X className="h-4 w-4" />
                 Cancel
@@ -266,6 +271,7 @@ export function CommonExpensesPanel({
           )}
         </form>
       </div>
+      </MobileCollapsible>
 
       <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -303,7 +309,7 @@ export function CommonExpensesPanel({
             return (
               <div
                 key={expense.id}
-                className={`grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_110px_120px_170px] md:items-center ${
+                className={`grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 p-4 md:grid-cols-[minmax(0,1fr)_110px_120px_170px] md:items-center md:gap-3 ${
                   editingExpenseId === expense.id ? "bg-teal-50/60" : ""
                 }`}
               >
@@ -315,18 +321,18 @@ export function CommonExpensesPanel({
                     {homestay?.name ?? "Homestay"} - {expense.category}
                   </p>
                 </div>
-                <span className="text-sm text-slate-500">
+                <span className="col-start-1 row-start-2 text-sm text-slate-500 md:col-auto md:row-auto">
                   {formatDate(expense.date)}
                 </span>
-                <span className="text-right text-sm font-semibold text-red-700">
+                <span className="col-start-2 row-start-1 text-right text-[15px] font-semibold text-red-700 md:col-auto md:row-auto md:text-sm">
                   -{inr.format(expense.amount)}
                 </span>
-                <div className="flex flex-wrap justify-start gap-2 md:justify-end">
+                <div className="col-span-2 grid grid-cols-2 gap-2 pt-1 md:col-span-1 md:flex md:flex-wrap md:justify-end md:pt-0">
                   <button
                     type="button"
                     onClick={() => onEdit(expense)}
                     disabled={disabled || isSaving}
-                    className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+                    className="inline-flex h-11 lg:h-9 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
                   >
                     <Pencil className="h-4 w-4" />
                     Edit
@@ -339,7 +345,7 @@ export function CommonExpensesPanel({
                       isSaving ||
                       deletingExpenseId === expense.id
                     }
-                    className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-red-100 bg-white px-3 text-sm font-semibold text-red-700 transition hover:border-red-200 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-red-300"
+                    className="inline-flex h-11 lg:h-9 items-center justify-center gap-2 rounded-md border border-red-100 bg-white px-3 text-sm font-semibold text-red-700 transition hover:border-red-200 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-red-300"
                   >
                     <Trash2 className="h-4 w-4" />
                     {deletingExpenseId === expense.id ? "Deleting" : "Delete"}
@@ -360,7 +366,7 @@ export function CommonExpensesPanel({
               type="button"
               onClick={() => onPageChange(Math.max(1, page - 1))}
               disabled={page <= 1 || isHistoryLoading}
-              className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+              className="inline-flex h-11 lg:h-9 items-center justify-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
             >
               Previous
             </button>
@@ -371,7 +377,7 @@ export function CommonExpensesPanel({
               type="button"
               onClick={() => onPageChange(Math.min(totalPages, page + 1))}
               disabled={page >= totalPages || isHistoryLoading}
-              className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+              className="inline-flex h-11 lg:h-9 items-center justify-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
             >
               Next
             </button>

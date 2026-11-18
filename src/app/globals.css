@@ -153,4 +153,79 @@ button:disabled { cursor: not-allowed; }
   .dashboard-intro h2 { font-size: 28px; }
   .dashboard-intro > svg { display: none; }
 }
+
+/* ------------------------------------------------------------------ */
+/* Mobile-first workspace shell                                         */
+/* ------------------------------------------------------------------ */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { -webkit-tap-highlight-color: transparent; }
+.pt-safe { padding-top: env(safe-area-inset-top); }
+.pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+
+/* Phone-sized header: compact, translucent, under the notch. */
+.mobile-appbar { padding-top: calc(env(safe-area-inset-top) + 10px); }
+.mobile-appbar .brand-mark { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: var(--forest); color: #fffdf3; flex-shrink: 0; }
+.mobile-appbar .brand-mark svg { width: 20px; height: 22px; }
+
+/* Bottom tab bar: thumb-reach navigation on phones and small tablets. */
+.mobile-tabbar { padding-bottom: env(safe-area-inset-bottom); background: #fffefaf5; border-top: 1px solid var(--line); box-shadow: 0 -8px 24px -18px #243d3555; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.mobile-tab { position: relative; display: flex; min-height: 58px; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: #6f7b6d; font-size: 11px; font-weight: 600; letter-spacing: .1px; transition: color 150ms ease; }
+.mobile-tab svg { width: 22px; height: 22px; stroke-width: 1.8; }
+.mobile-tab[aria-current="page"], .mobile-tab[data-active="true"] { color: var(--forest); }
+.mobile-tab[aria-current="page"]::before, .mobile-tab[data-active="true"]::before { content: ""; position: absolute; top: 0; left: 50%; width: 28px; height: 3px; transform: translateX(-50%); border-radius: 0 0 3px 3px; background: var(--terracotta); }
+.mobile-tab[aria-current="page"] .mobile-tab-icon, .mobile-tab[data-active="true"] .mobile-tab-icon { background: #e4e8d5; }
+.mobile-tab-icon { display: grid; place-items: center; width: 48px; height: 28px; border-radius: 999px; transition: background 150ms ease; }
+
+/* Primary floating action, kept clear of the tab bar and the home indicator. */
+.mobile-fab { bottom: calc(env(safe-area-inset-bottom) + 74px); box-shadow: 0 10px 24px -8px #243d3599, 0 2px 6px #243d3533; }
+
+/* Room for the tab bar below the last card. */
+.dashboard-content { padding-bottom: calc(env(safe-area-inset-bottom) + 112px); }
+
+/* Sheet-style dialogs on phones. */
+.dashboard-modal-panel { padding-bottom: calc(env(safe-area-inset-bottom) + 16px); }
+
+@media (max-width: 1023px) {
+  /* 16px text stops iOS zooming into fields; 44px is the minimum comfortable tap height. */
+  .field-control { height: 2.875rem; font-size: 1rem; }
+  .dashboard-shell input:not([type="checkbox"]):not([type="radio"]), .dashboard-shell select { font-size: 1rem; }
+  .dashboard-header { padding-top: 0; padding-bottom: 12px; }
+  .dashboard-intro { padding: 18px 20px; }
+  .dashboard-intro h2 { font-size: 24px; margin: 6px 0 4px; }
+  .metric-card { padding: 16px; }
+  .metric-value { font-size: clamp(20px, 6vw, 26px); overflow-wrap: anywhere; }
+}
+@media (max-width: 1023px) {
+  /* Primary form actions stay in reach while long forms scroll. */
+  .sticky-submit { position: sticky; bottom: calc(env(safe-area-inset-bottom) + 12px); z-index: 5; height: 3rem; font-size: 15px; border-radius: 10px; box-shadow: 0 0 0 8px #fff, 0 12px 24px -12px #243d3599; }
+  .sticky-actions { position: sticky; bottom: 0; z-index: 5; margin: 0 -16px -16px; padding: 12px 16px calc(env(safe-area-inset-bottom) + 12px); background: #fffefaf7; border-top: 1px solid var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+  .dashboard-content .sticky-submit { bottom: calc(env(safe-area-inset-bottom) + 76px); }
+  .dashboard-content .sticky-actions { bottom: calc(env(safe-area-inset-bottom) + 58px); margin-bottom: 0; padding-bottom: 12px; }
+  .dashboard-content .mobile-form-screen .sticky-actions { bottom: 0; margin-bottom: -16px; padding-bottom: calc(env(safe-area-inset-bottom) + 12px); }
+  /* "Add homestay" / "Add customer" open as full-screen forms on phones. */
+  .mobile-form-screen { position: fixed; inset: 0; z-index: 60; margin: 0 !important; overflow-y: auto; overscroll-behavior: contain; border: 0 !important; border-radius: 0 !important; padding: calc(env(safe-area-inset-top) + 16px) 16px 16px !important; animation: sheet-up 260ms cubic-bezier(.22,1,.36,1) both; }
+  .mobile-form-screen .mobile-form-header { position: sticky; top: calc(-1 * (env(safe-area-inset-top) + 16px)); z-index: 6; margin: calc(-1 * (env(safe-area-inset-top) + 16px)) -16px 0; padding: calc(env(safe-area-inset-top) + 16px) 16px 12px; background: #fff; border-bottom: 1px solid var(--line); }
+  .mobile-form-screen .mobile-form-header h2 { font-family: var(--font-editorial); font-size: 24px; font-weight: 400; letter-spacing: -.4px; }
+}
+@media (max-width: 759px) {
+  /* Sign-in on phones: larger type and full-height fields, clear of the notch and home bar. */
+  .story-brand { padding-top: calc(env(safe-area-inset-top) + 20px); }
+  .sign-in-workspace { padding-bottom: calc(env(safe-area-inset-bottom) + 20px); }
+  .form-eyebrow { font-size: 10px; }
+  .sign-in-intro { font-size: 14px; line-height: 1.7; }
+  .sign-in-form label { font-size: 13px; }
+  .sign-in-form .field-control { height: 52px; font-size: 16px; }
+  .sign-in-submit { height: 52px; font-size: 15px; }
+  .sign-in-error { font-size: 14px; }
+  .team-access { font-size: 10px; }
+  .access-note { font-size: 13px; }
+  .sign-in-help { font-size: 14px; }
+  .sign-in-help summary { min-height: 44px; display: flex; align-items: center; }
+  .workspace-footer { font-size: 11px; }
+}
+@keyframes sheet-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (min-width: 1024px) {
+  .dashboard-content { padding-bottom: 40px; }
+  .dashboard-modal-panel { padding-bottom: 1rem; }
+}
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; scroll-behavior: auto !important; transition: none !important; } }
