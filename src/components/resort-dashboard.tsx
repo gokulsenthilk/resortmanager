@@ -114,6 +114,7 @@ import {
   startOfMonthIso,
   endOfMonthIso,
   addDaysIso,
+  calculateOccupancy,
   getBookingEntries,
   defaultBookingEntryLabel,
   defaultCommonExpenseLabel,
@@ -619,14 +620,16 @@ export function ResortDashboard({
     const totalRevenue =
       bookedRevenue + bookingExtraIncome - bookingExtraExpense;
     const pending = bookedRevenue - received;
-    const occupied = visibleBookings.filter((booking) =>
-      ["confirmed", "checked_in"].includes(booking.status),
-    ).length;
-    const totalUnits =
-      selectedHomestayId === "all"
-        ? homestays.reduce((total, homestay) => total + homestay.units, 0)
-        : (homestays.find((item) => item.id === selectedHomestayId)?.units ??
-          0);
+    const occupancy = calculateOccupancy({
+      bookings: visibleBookings,
+      homestays:
+        selectedHomestayId === "all"
+          ? homestays
+          : homestays.filter((item) => item.id === selectedHomestayId),
+      rooms,
+      from: dateFrom,
+      to: dateTo,
+    });
 
     return {
       bookedRevenue,
@@ -637,11 +640,14 @@ export function ResortDashboard({
       salaryExpenses,
       received,
       pending,
-      occupancy: totalUnits > 0 ? Math.round((occupied / totalUnits) * 100) : 0,
+      occupancy,
     };
   }, [
     accountEntries,
+    dateFrom,
+    dateTo,
     homestays,
+    rooms,
     selectedHomestayId,
     visibleAccounts,
     visibleBookings,

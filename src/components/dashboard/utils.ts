@@ -2,6 +2,8 @@ import type {
   AccountEntry,
   Booking,
   DashboardData,
+  Homestay,
+  Room,
   StaffPaymentMethod,
   StaffSalaryPayment,
 } from "@/lib/types";
@@ -369,4 +371,97 @@ export function normalizeHomestayRoomForms(
       };
     })
     .filter((room) => room.name);
+}
+
+const occupyingStatuses = new Set<Booking["status"]>([
+  "confirmed",
+  "checked_in",
+  "checked_out",
+]);
+
+/**
+ * Occupancy % = occupied room-nights / available room-nights in the period.
+ *
+ * - Period: the Overview date filter (`from`..`to`, both inclusive nights). An open end falls back
+ *   to the earliest check-in / latest check-out of the counted bookings, so "All dates" means the
+ *   span the bookings cover.
+ * - Available: per homestay, its active rooms (or `units` when no rooms are set up) × nights.
+ * - Occupied: confirmed, checked-in and checked-out bookings (not pending or cancelled), one room
+ *   per booking for each night from check-in up to (not including) check-out, clamped to the
+ *   period and capped at the homestay's rooms on any single night, so double bookings can't push
+ *   it past 100%.
+ */
+export function calculateOccupancy({
+  bookings,
+  homestays,
+  rooms,
+  from,
+  to,
+}: {
+  bookings: Booking[];
+  homestays: Homestay[];
+  rooms: Room[];
+  from: string;
+  to: string;
+}) {
+  const homestayIds = new Set(homestays.map((homestay) => homestay.id));
+  const counted = bookings.filter(
+    (booking) =>
+      occupyingStatuses.has(booking.status) &&
+      homestayIds.has(booking.homestayId) &&
+      booking.checkOut > booking.checkIn,
+  );
+
+  const periodStart =
+    from || counted.reduce((min, booking) => (!min || booking.checkIn < min ? booking.checkIn : min), "");
+  const lastNight = (checkOut: string) =>
+    addDaysIso(new Date(`${checkOut}T00:00:00`), -1);
+  const periodEnd =
+    to ||
+    counted.reduce((max, booking) => {
+      const night = lastNight(booking.checkOut);
+      return !max || night > max ? night : max;
+    }, "");
+
+  if (!periodStart || !periodEnd || periodEnd < periodStart) {
+    return 0;
+  }
+
+  const nights: string[] = [];
+  for (
+    let night = periodStart;
+    night <= periodEnd;
+    night = addDaysIso(new Date(`${night}T00:00:00`), 1)
+  ) {
+    nights.push(night);
+  }
+
+  const capacity = new Map(
+    homestays.map((homestay) => {
+      const activeRooms = rooms.filter(
+        (room) => room.homestayId === homestay.id && room.isActive,
+      ).length;
+      return [homestay.id, activeRooms > 0 ? activeRooms : Math.max(0, homestay.units)];
+    }),
+  );
+  const available =
+    [...capacity.values()].reduce((total, value) => total + value, 0) * nights.length;
+
+  if (available === 0) {
+    return 0;
+  }
+
+  let occupied = 0;
+  for (const homestay of homestays) {
+    const roomCount = capacity.get(homestay.id) ?? 0;
+    const stays = counted.filter((booking) => booking.homestayId === homestay.id);
+    for (const night of nights) {
+      const booked = stays.filter(
+        (booking) => booking.checkIn <= night && booking.checkOut > night,
+      ).length;
+      occupied += Math.min(booked, roomCount);
+    }
+  }
+
+  return Math.min(100, Math.round((occupied / available) * 100));
 }
