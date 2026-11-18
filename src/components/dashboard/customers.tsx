@@ -47,7 +47,7 @@ export function SearchableCustomerSelect({
           setIsOpen(true);
         }}
         onFocus={() => setIsOpen(true)}
-        className="h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-8 text-sm text-slate-800 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+        className="h-11 lg:h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-8 text-sm text-slate-800 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
         placeholder={
           customers.length === 0 ? "No customers found" : "Search customer"
         }
@@ -145,8 +145,8 @@ export function CustomerCreateForm({
   onCancel: () => void;
 }) {
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <section className="mobile-form-screen rounded-lg border border-slate-200 bg-white p-4 shadow-sm" aria-label="Add Customer">
+      <div className="mobile-form-header flex items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-slate-950">
             Add Customer
@@ -158,7 +158,7 @@ export function CustomerCreateForm({
         <button
           type="button"
           onClick={onCancel}
-          className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-3 text-sm font-medium text-slate-700 transition hover:border-slate-300"
+          className="inline-flex h-11 shrink-0 items-center justify-center rounded-md border border-slate-200 px-4 text-sm font-medium text-slate-700 transition hover:border-slate-300 lg:h-9 lg:px-3"
         >
           Cancel
         </button>
@@ -220,11 +220,11 @@ export function CustomerCreateForm({
             />
           </Field>
         </div>
-        <div className="lg:col-span-3">
+        <div className="sticky-actions lg:col-span-3">
           <button
             type="submit"
             disabled={disabled || isSaving}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+            className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-300 lg:h-10 lg:w-auto"
           >
             <Plus className="h-4 w-4" />
             {isSaving ? "Adding customer" : "Add Customer"}
@@ -329,7 +329,7 @@ export function CustomerEditFormPanel({
           <button
             type="submit"
             disabled={disabled || !canSubmit}
-            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+            className="sticky-submit inline-flex h-11 lg:h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
             <Pencil className="h-4 w-4" />
             {isSaving ? "Saving changes" : "Update Customer"}
@@ -419,7 +419,7 @@ export function CustomerTable({
                 setCustomerSearch(event.target.value);
                 setPage(1);
               }}
-              className="h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-800 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+              className="h-11 lg:h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-800 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
               placeholder="Name, phone, email"
             />
           </label>
@@ -451,7 +451,7 @@ export function CustomerTable({
               setCityFilter("all");
               setPage(1);
             }}
-            className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+            className="inline-flex h-11 lg:h-8 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
           >
             <Filter className="h-4 w-4" />
             Clear filters
@@ -470,14 +470,21 @@ export function CustomerTable({
                 <p className="truncate font-semibold text-slate-950">
                   {customer.name}
                 </p>
-                <p className="mt-1 text-sm text-slate-500">
-                  {customer.phone || "No phone"}
-                </p>
+                {customer.phone ? (
+                  <a
+                    href={`tel:${customer.phone.replace(/[^\d+]/g, "")}`}
+                    className="mt-1 inline-flex min-h-8 items-center text-sm font-medium text-teal-700 underline-offset-4 hover:underline"
+                  >
+                    {customer.phone}
+                  </a>
+                ) : (
+                  <p className="mt-1 text-sm text-slate-500">No phone</p>
+                )}
               </div>
               <button
                 type="button"
                 onClick={() => onEditCustomer(customer)}
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-slate-200 text-slate-700 transition hover:border-slate-300"
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-md border lg:h-9 lg:w-9 border-slate-200 text-slate-700 transition hover:border-slate-300"
                 aria-label={`Edit ${customer.name}`}
               >
                 <Pencil className="h-4 w-4" />
@@ -556,7 +563,7 @@ export function CustomerTable({
                   <button
                     type="button"
                     onClick={() => onEditCustomer(customer)}
-                    className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+                    className="inline-flex h-11 lg:h-9 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
                   >
                     <Pencil className="h-4 w-4" />
                     Edit
@@ -577,7 +584,7 @@ export function CustomerTable({
             type="button"
             onClick={() => setPage((current) => Math.max(1, current - 1))}
             disabled={currentPage === 1}
-            className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+            className="inline-flex h-11 lg:h-9 items-center justify-center rounded-md border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
           >
             Previous
           </button>
@@ -587,7 +594,7 @@ export function CustomerTable({
               setPage((current) => Math.min(totalPages, current + 1))
             }
             disabled={currentPage === totalPages}
-            className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+            className="inline-flex h-11 lg:h-9 items-center justify-center rounded-md border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
           >
             Next
           </button>

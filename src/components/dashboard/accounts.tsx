@@ -95,9 +95,9 @@ export function AccountsPanel({
           {transactions.map((transaction) => (
             <div
               key={transaction.id}
-              className="grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_150px_140px] md:items-center"
+              className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 p-4 md:grid-cols-[minmax(0,1fr)_150px_140px] md:items-center md:gap-3"
             >
-              <div>
+              <div className="min-w-0">
                 <p className="font-medium text-slate-950">
                   {transaction.label}
                 </p>
@@ -105,11 +105,11 @@ export function AccountsPanel({
                   {transaction.detail}
                 </p>
               </div>
-              <span className="text-sm text-slate-500">
+              <span className="col-start-1 row-start-2 text-sm text-slate-500 md:col-auto md:row-auto">
                 {formatDate(transaction.date)}
               </span>
               <span
-                className={`text-right text-sm font-semibold ${transaction.type === "income" ? "text-teal-700" : "text-red-700"}`}
+                className={`col-start-2 row-start-1 text-right text-[15px] font-semibold md:col-auto md:row-auto md:text-sm ${transaction.type === "income" ? "text-teal-700" : "text-red-700"}`}
               >
                 {transaction.type === "income" ? "+" : "-"}
                 {inr.format(transaction.amount)}

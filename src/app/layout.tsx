@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 
@@ -12,6 +12,13 @@ const dmSans = localFont({
 export const metadata: Metadata = {
   title: "StayLedger | Homestay Manager",
   description: "Customer, booking, and accounts management for multiple homestays.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#243d35",
 };
 
 export default function RootLayout({

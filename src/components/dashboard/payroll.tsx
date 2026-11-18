@@ -1,4 +1,4 @@
-import { CheckCircle2, Pencil, Plus, Search } from "lucide-react";
+import { CheckCircle2, Pencil, Plus, Search, UserPlus } from "lucide-react";
 import { Picker } from "@/components/ui/picker";
 import { toOptions } from "@/components/ui/picker-options";
 import { FormEvent, useMemo, useState } from "react";
@@ -16,7 +16,7 @@ import {
   type StaffEditForm,
   type StaffSalaryPaymentForm,
 } from "./shared";
-import { EmptyState, Field, Stat } from "./ui";
+import { EmptyState, Field, MobileCollapsible, Stat } from "./ui";
 import {
   formatDate,
   salaryMonthDate,
@@ -103,14 +103,19 @@ export function StaffPanel({
 
   return (
     <section className="grid min-w-0 gap-5 2xl:grid-cols-[420px_minmax(0,1fr)]">
-      <StaffCreateForm
-        form={form}
-        isSaving={isSaving}
-        error={saveError}
-        disabled={disabled}
-        onChange={onChange}
-        onSubmit={onSubmit}
-      />
+      <MobileCollapsible
+        label="Add staff member"
+        icon={<UserPlus className="h-5 w-5" aria-hidden="true" />}
+      >
+        <StaffCreateForm
+          form={form}
+          isSaving={isSaving}
+          error={saveError}
+          disabled={disabled}
+          onChange={onChange}
+          onSubmit={onSubmit}
+        />
+      </MobileCollapsible>
 
       <div className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-4 border-b border-slate-200 p-4 xl:flex-row xl:items-end xl:justify-between">
@@ -134,7 +139,7 @@ export function StaffPanel({
                   setStaffSearch(event.target.value);
                   setPage(1);
                 }}
-                className="h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-800 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                className="h-11 lg:h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-800 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
                 placeholder="Name, mobile, email, ID"
               />
             </label>
@@ -160,7 +165,7 @@ export function StaffPanel({
           </div>
         </div>
 
-        <div className="grid gap-3 border-b border-slate-100 p-4 md:grid-cols-3">
+        <div className="grid grid-cols-3 gap-2 border-b border-slate-100 p-4 md:gap-3">
           <Stat label="Active staff" value={String(activeStaffCount)} />
           <Stat
             label={`${formatMonthLabel(salaryMonth)} paid`}
@@ -225,7 +230,7 @@ export function StaffPanel({
                   </p>
                 </div>
 
-                <div className="grid gap-1 text-sm text-slate-600">
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1 rounded-md bg-slate-50 p-3 text-sm text-slate-600 sm:grid-cols-1 sm:bg-transparent sm:p-0">
                   <p>Aadhar: {staff.aadharNumber || "Not recorded"}</p>
                   <p>PAN: {staff.panNumber || "Not recorded"}</p>
                   <p>
@@ -268,11 +273,11 @@ export function StaffPanel({
                   )}
                 </div>
 
-                <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-start xl:justify-end [&>*:only-child]:col-span-2 [&>*:last-child:nth-child(odd)]:col-span-2">
                   <button
                     type="button"
                     onClick={() => onEditStaff(staff)}
-                    className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+                    className="inline-flex h-11 lg:h-9 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
                   >
                     <Pencil className="h-4 w-4" />
                     Edit
@@ -283,7 +288,7 @@ export function StaffPanel({
                         type="button"
                         onClick={() => onMarkPaid(staff)}
                         disabled={disabled || isUpdating}
-                        className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+                        className="inline-flex h-11 lg:h-9 items-center justify-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
                       >
                         Edit pay
                       </button>
@@ -291,7 +296,7 @@ export function StaffPanel({
                         type="button"
                         onClick={() => payment && onMarkUnpaid(payment)}
                         disabled={disabled || isUpdating}
-                        className="inline-flex h-9 items-center justify-center rounded-md border border-amber-200 px-3 text-sm font-semibold text-amber-700 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:text-amber-300"
+                        className="inline-flex h-11 lg:h-9 items-center justify-center rounded-md border border-amber-200 px-3 text-sm font-semibold text-amber-700 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:text-amber-300"
                       >
                         {isUpdating ? "Saving" : "Mark unpaid"}
                       </button>
@@ -301,7 +306,7 @@ export function StaffPanel({
                       type="button"
                       onClick={() => onMarkPaid(staff)}
                       disabled={disabled || isUpdating}
-                      className="inline-flex h-9 items-center justify-center rounded-md bg-teal-700 px-3 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                      className="inline-flex h-11 lg:h-9 items-center justify-center rounded-md bg-teal-700 px-3 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-300"
                     >
                       {isUpdating ? "Saving" : "Mark paid"}
                     </button>
@@ -321,7 +326,7 @@ export function StaffPanel({
               type="button"
               onClick={() => setPage((current) => Math.max(1, current - 1))}
               disabled={currentPage === 1}
-              className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+              className="inline-flex h-11 lg:h-9 items-center justify-center rounded-md border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
             >
               Previous
             </button>
@@ -331,7 +336,7 @@ export function StaffPanel({
                 setPage((current) => Math.min(totalPages, current + 1))
               }
               disabled={currentPage === totalPages}
-              className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
+              className="inline-flex h-11 lg:h-9 items-center justify-center rounded-md border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:text-slate-300"
             >
               Next
             </button>
@@ -370,7 +375,7 @@ export function StaffCreateForm({
           disabled={
             disabled || isSaving || !form.name.trim() || !form.mobileNumber.trim()
           }
-          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+          className="sticky-submit inline-flex h-11 lg:h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
         >
           <Plus className="h-4 w-4" />
           {isSaving ? "Saving staff" : "Add staff"}
@@ -411,7 +416,7 @@ export function StaffEditFormPanel({
           disabled={disabled}
           onChange={(nextForm) => onChange({ ...form, ...nextForm })}
         />
-        <label className="flex h-10 items-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-medium text-slate-700">
+        <label className="flex h-11 lg:h-10 items-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-medium text-slate-700">
           <input
             type="checkbox"
             checked={form.isActive}
@@ -428,7 +433,7 @@ export function StaffEditFormPanel({
           disabled={
             disabled || isSaving || !form.name.trim() || !form.mobileNumber.trim()
           }
-          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+          className="sticky-submit inline-flex h-11 lg:h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
         >
           <Pencil className="h-4 w-4" />
           {isSaving ? "Saving staff" : "Update staff"}
@@ -578,7 +583,7 @@ export function StaffSalaryPaymentPanel({
                   onChange(applyStaffPaymentMethod(form, method.value))
                 }
                 disabled={disabled || isSaving}
-                className={`h-9 rounded text-sm font-semibold transition ${
+                className={`h-10 rounded lg:h-9 text-sm font-semibold transition ${
                   form.paymentMethod === method.value
                     ? "bg-white text-slate-950 shadow-sm"
                     : "text-slate-500 hover:text-slate-800"
@@ -665,7 +670,7 @@ export function StaffSalaryPaymentPanel({
             form.bankAmount < 0 ||
             !isBalanced
           }
-          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+          className="sticky-submit inline-flex h-11 lg:h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
         >
           <CheckCircle2 className="h-4 w-4" />
           {isSaving ? "Saving payment" : "Save salary payment"}

@@ -9,13 +9,12 @@ import {
   CalendarCheck,
   Home,
   IdCard,
-  Menu,
   Plus,
   ReceiptText,
   Search,
+  UserRound,
   UsersRound,
   WalletCards,
-  X,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Brand } from "@/components/brand";
@@ -78,6 +77,13 @@ import {
   HomestayEditFormPanel,
   HomestayGrid,
 } from "./dashboard/homestays";
+import {
+  MobileFab,
+  MobileMoreSheet,
+  MobileQuickAddSheet,
+  MobileTabBar,
+  splitMobileNav,
+} from "./dashboard/mobile-shell";
 import { MetricGrid, OverviewFocus } from "./dashboard/overview";
 import {
   StaffPanel,
@@ -197,6 +203,7 @@ export function ResortDashboard({
   const [activeRole, setActiveRole] = useState<UserRole>("Manager");
   const [userId, setUserId] = useState("");
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [showQuickBookingModal, setShowQuickBookingModal] = useState(false);
   const [showBookingEntryModal, setShowBookingEntryModal] = useState(false);
   const [showEditBookingModal, setShowEditBookingModal] = useState(false);
@@ -360,6 +367,9 @@ export function ResortDashboard({
   } = data;
   const visibleNavItems = navItems.filter((item) =>
     canAccessModule(activeRole, item.key),
+  );
+  const mobileOverflowKeys = splitMobileNav(visibleNavItems).overflow.map(
+    (item) => item.key,
   );
 
   useEffect(() => {
@@ -1575,94 +1585,6 @@ export function ResortDashboard({
   return (
     <div className="dashboard-shell min-h-screen bg-white text-slate-950">
       <div className="flex min-h-screen">
-        {isMobileNavOpen && (
-          <div className="fixed inset-0 z-50 lg:hidden">
-            <button
-              type="button"
-              aria-label="Close navigation"
-              className="absolute inset-0 bg-slate-950/50"
-              onClick={() => setIsMobileNavOpen(false)}
-            />
-            <aside className="dashboard-sidebar relative flex h-full w-80 max-w-[86vw] flex-col overflow-y-auto overscroll-contain bg-slate-950 px-4 py-5 text-white shadow-2xl">
-              <div className="mb-6 flex items-center justify-between gap-3 px-2">
-                <Brand light />
-                <button
-                  type="button"
-                  aria-label="Close navigation"
-                  className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-white/10 text-slate-300 transition hover:bg-white/10 hover:text-white"
-                  onClick={() => setIsMobileNavOpen(false)}
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              <p className="nav-caption">YOUR WORKSPACE</p>
-              <nav className="dashboard-nav space-y-1" aria-label="Main navigation">
-                {visibleNavItems.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = activeModule === item.key;
-
-                  return (
-                    <Link
-                      key={item.key}
-                      href={item.href}
-                      aria-current={isActive ? "page" : undefined}
-                      onClick={() => {
-                        setActiveModule(item.key);
-                        setIsMobileNavOpen(false);
-                      }}
-                      className={`flex h-11 w-full items-center gap-3 rounded-md px-3 text-sm font-medium transition ${
-                        isActive
-                          ? "bg-white text-slate-950"
-                          : "text-slate-300 hover:bg-slate-900 hover:text-white"
-                      }`}
-                    >
-                      <Icon className="h-4 w-4" />
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </nav>
-
-              {activeRole === "Admin" && (
-                <div className="mt-5 space-y-2 border-t border-white/10 pt-5">
-                  <Link
-                    href="/bookings"
-                    onClick={() => setIsMobileNavOpen(false)}
-                    className="inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-md bg-teal-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-teal-400"
-                  >
-                    <Plus className="h-4 w-4" />
-                    New booking
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={openHomestayForm}
-                    className="inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/10"
-                  >
-                    <Building2 className="h-4 w-4" />
-                    Add Homestay
-                  </button>
-                  <button
-                    type="button"
-                    onClick={openCustomerForm}
-                    className="inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/10"
-                  >
-                    <UsersRound className="h-4 w-4" />
-                    Add Customer
-                  </button>
-                </div>
-              )}
-
-              <SidebarAuthCard
-                isConfigured={isSupabaseConfigured}
-                email={sessionEmail}
-                role={activeRole}
-                onSignOut={signOut}
-              />
-            </aside>
-          </div>
-        )}
-
         <aside className="dashboard-sidebar fixed inset-y-0 left-0 z-30 hidden h-dvh w-72 overflow-y-auto overscroll-contain border-r border-slate-200 bg-slate-950 px-4 py-5 text-white lg:block">
           <Brand light />
           <p className="nav-caption">YOUR WORKSPACE</p>
@@ -1700,23 +1622,29 @@ export function ResortDashboard({
 
         <main className="flex min-w-0 flex-1 flex-col bg-slate-50 lg:ml-72">
           <header className="dashboard-header sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur md:px-6">
-            <div className="mb-4 flex items-center justify-between gap-3 lg:hidden">
-              <button
-                type="button"
-                aria-label="Open navigation"
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-slate-200 bg-white text-slate-800 transition hover:border-slate-300"
-                onClick={() => setIsMobileNavOpen(true)}
-              >
-                <Menu className="h-5 w-5" />
-              </button>
+            <div className="mobile-appbar flex items-center gap-3 pb-3 lg:hidden">
+              <span className="brand-mark" aria-hidden="true">
+                <svg viewBox="0 0 40 44" fill="none">
+                  <path d="M7 38V20a13 13 0 0 1 26 0v18M15 38V21a5 5 0 0 1 10 0v17M3 38h34" stroke="currentColor" strokeWidth="2.4" />
+                  <path d="M20 1v3M3 8l3 3M37 8l-3 3" stroke="currentColor" strokeWidth="2" />
+                </svg>
+              </span>
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
-                  StayLedger / Workspace
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-teal-700">
+                  StayLedger
                 </p>
-                <h1 className="dashboard-heading truncate text-2xl text-slate-950">
+                <h1 className="dashboard-heading truncate text-[26px] leading-tight text-slate-950">
                   {navItems.find((item) => item.key === activeModule)?.label}
                 </h1>
               </div>
+              <button
+                type="button"
+                aria-label="Account and more"
+                onClick={() => setIsMobileNavOpen(true)}
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-slate-200 bg-white text-sm font-semibold uppercase text-slate-800 transition hover:border-slate-300"
+              >
+                {sessionEmail ? sessionEmail.charAt(0) : <UserRound className="h-5 w-5" />}
+              </button>
             </div>
 
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
@@ -1729,19 +1657,20 @@ export function ResortDashboard({
                 </h1>
               </div>
 
-              <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-end">
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,46%)] gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,16rem)] lg:flex lg:flex-row lg:flex-wrap lg:items-center lg:justify-end lg:gap-3">
                 <label className="relative min-w-0 lg:w-64">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <input
+                    type="search"
                     aria-label="Search bookings or guests"
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    className="h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-800 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
-                    placeholder="Search bookings or guests"
+                    className="h-11 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-800 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100 lg:h-10"
+                    placeholder="Search guests"
                   />
                 </label>
 
-                <div className="relative">
+                <div className="relative min-w-0">
                   <Picker
                     label="Filter by homestay"
                     title="Homestay"
@@ -1753,27 +1682,6 @@ export function ResortDashboard({
                     className="lg:w-56"
                   />
                 </div>
-
-                {activeRole === "Admin" && (
-                  <div className="grid grid-cols-2 gap-2 lg:hidden">
-                  <button
-                    type="button"
-                    onClick={openQuickBookingModal}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-teal-700 px-3 text-sm font-semibold text-white transition hover:bg-teal-800"
-                  >
-                    <CalendarCheck className="h-4 w-4" />
-                    Quick booking
-                  </button>
-                  <button
-                    type="button"
-                    onClick={openBookingEntryModal}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 transition hover:border-slate-300"
-                  >
-                    <ReceiptText className="h-4 w-4" />
-                    Income/expense
-                  </button>
-                  </div>
-                )}
 
                 <div className="hidden items-center gap-3 lg:flex lg:flex-wrap lg:justify-end">
                   {activeRole === "Admin" && (
@@ -1894,6 +1802,24 @@ export function ResortDashboard({
 
             {activeModule === "bookings" && (
               <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+                <div className="grid grid-cols-2 gap-2 lg:hidden">
+                  <button
+                    type="button"
+                    onClick={openQuickBookingModal}
+                    className="inline-flex h-12 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-teal-700 px-3 text-sm font-semibold text-white transition hover:bg-teal-800"
+                  >
+                    <CalendarCheck className="h-5 w-5" />
+                    New booking
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openBookingEntryModal}
+                    className="inline-flex h-12 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 transition hover:border-slate-300"
+                  >
+                    <ReceiptText className="h-5 w-5" />
+                    Income / expense
+                  </button>
+                </div>
                 <BookingTable
                   bookings={visibleBookings}
                   customers={customers}
@@ -1901,7 +1827,7 @@ export function ResortDashboard({
                   accountEntries={accountEntries}
                   onEditBooking={openEditBookingModal}
                 />
-                <div className="space-y-5">
+                <div className="hidden space-y-5 lg:block">
                   <QuickBookingForm
                     form={bookingForm}
                     customers={customers}
@@ -2036,6 +1962,38 @@ export function ResortDashboard({
           </div>
         </main>
       </div>
+
+      <MobileTabBar
+        items={visibleNavItems}
+        activeModule={activeModule}
+        isMoreActive={isMobileNavOpen || mobileOverflowKeys.includes(activeModule)}
+        onNavigate={(key) => setActiveModule(key)}
+        onMoreClick={() => setIsMobileNavOpen(true)}
+      />
+      <MobileMoreSheet
+        open={isMobileNavOpen}
+        items={visibleNavItems}
+        activeModule={activeModule}
+        email={sessionEmail}
+        role={activeRole}
+        isConfigured={isSupabaseConfigured}
+        onClose={() => setIsMobileNavOpen(false)}
+        onNavigate={(key) => setActiveModule(key)}
+        onSignOut={signOut}
+      />
+      {activeRole === "Admin" && (
+        <>
+          <MobileFab onClick={() => setIsQuickAddOpen(true)} />
+          <MobileQuickAddSheet
+            open={isQuickAddOpen}
+            onClose={() => setIsQuickAddOpen(false)}
+            onNewBooking={openQuickBookingModal}
+            onBookingEntry={openBookingEntryModal}
+            onAddHomestay={openHomestayForm}
+            onAddCustomer={openCustomerForm}
+          />
+        </>
+      )}
 
       {showQuickCustomerModal && (
         <QuickCustomerModal

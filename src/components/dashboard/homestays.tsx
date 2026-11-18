@@ -27,8 +27,8 @@ export function HomestayCreateForm({
   onCancel: () => void;
 }) {
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <section className="mobile-form-screen rounded-lg border border-slate-200 bg-white p-4 shadow-sm" aria-label="Add Homestay">
+      <div className="mobile-form-header flex items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-slate-950">
             Add Homestay
@@ -40,7 +40,7 @@ export function HomestayCreateForm({
         <button
           type="button"
           onClick={onCancel}
-          className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-3 text-sm font-medium text-slate-700 transition hover:border-slate-300"
+          className="inline-flex h-11 shrink-0 items-center justify-center rounded-md border border-slate-200 px-4 text-sm font-medium text-slate-700 transition hover:border-slate-300 lg:h-9 lg:px-3"
         >
           Cancel
         </button>
@@ -102,11 +102,11 @@ export function HomestayCreateForm({
             }
           />
         </div>
-        <div className="lg:col-span-3">
+        <div className="sticky-actions lg:col-span-3">
           <button
             type="submit"
             disabled={disabled || isSaving}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+            className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-300 lg:h-10 lg:w-auto"
           >
             <Plus className="h-4 w-4" />
             {isSaving ? "Adding homestay" : "Add Homestay"}
@@ -222,7 +222,7 @@ export function HomestayEditFormPanel({
           <button
             type="submit"
             disabled={disabled || !canSubmit}
-            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+            className="sticky-submit inline-flex h-11 lg:h-10 w-full items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
             <Pencil className="h-4 w-4" />
             {isSaving ? "Saving changes" : "Update Homestay"}
@@ -260,7 +260,7 @@ export function HomestayGrid({
       : homestays.filter((homestay) => homestay.id === selectedHomestayId);
 
   return (
-    <section className="grid min-w-0 gap-4 lg:grid-cols-3">
+    <section className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3">
       {visibleHomestays.map((homestay) => (
         <HomestayCard
           key={homestay.id}
@@ -319,7 +319,7 @@ export function HomestayCard({
           <button
             type="button"
             onClick={() => onEditHomestay(homestay)}
-            className="grid h-8 w-8 place-items-center rounded-md border border-slate-200 text-slate-700 transition hover:border-slate-300"
+            className="grid h-11 w-11 place-items-center rounded-md border lg:h-8 lg:w-8 border-slate-200 text-slate-700 transition hover:border-slate-300"
             aria-label={`Edit ${homestay.name}`}
           >
             <Pencil className="h-4 w-4" />
