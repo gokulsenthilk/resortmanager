@@ -117,6 +117,7 @@ export function MobileMoreSheet({
   activeModule,
   email,
   role,
+  organisationName,
   isConfigured,
   onClose,
   onNavigate,
@@ -127,6 +128,7 @@ export function MobileMoreSheet({
   activeModule: ModuleKey;
   email: string;
   role: UserRole;
+  organisationName?: string;
   isConfigured: boolean;
   onClose: () => void;
   onNavigate: (key: ModuleKey) => void;
@@ -183,7 +185,10 @@ export function MobileMoreSheet({
         {email ? (
           <>
             <p className="mt-3 truncate text-[15px] font-semibold">{email}</p>
-            <p className="mt-0.5 text-sm text-slate-300">{roleLabels[role]}</p>
+            <p className="mt-0.5 text-sm text-slate-300">
+              {roleLabels[role]}
+              {organisationName ? ` · ${organisationName}` : ""}
+            </p>
             <button
               type="button"
               onClick={() => {

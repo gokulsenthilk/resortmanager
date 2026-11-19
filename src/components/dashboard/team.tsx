@@ -38,6 +38,7 @@ const blankForm: MemberForm = {
   homestayIds: [],
   canViewPricing: false,
   canEnterExpenses: false,
+  canManageKitchen: false,
   isActive: true,
   staffMemberId: "",
   sendInvite: true,
@@ -230,6 +231,11 @@ export function TeamAccessPanel({
                   <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${roleBadgeStyles[member.role]}`}>
                     {roleLabels[member.role]}
                   </span>
+                  {member.isOwner && (
+                    <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs font-semibold text-slate-600">
+                      Owner
+                    </span>
+                  )}
                   {!member.isActive && (
                     <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">
                       Paused
@@ -258,8 +264,12 @@ export function TeamAccessPanel({
                   {member.role === "Caretaker" && member.canEnterExpenses && (
                     <span className="rounded-lg bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">Records expenses</span>
                   )}
+                  {member.role === "Caretaker" && member.canManageKitchen && (
+                    <span className="rounded-lg bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">Kitchen</span>
+                  )}
                 </div>
               </div>
+              {!member.isOwner && (
               <button
                 type="button"
                 onClick={() => openEdit(member)}
@@ -269,6 +279,7 @@ export function TeamAccessPanel({
                 <Pencil className="h-4 w-4" aria-hidden="true" />
                 Edit access
               </button>
+              )}
             </li>
           ))}
         </ul>
@@ -446,6 +457,14 @@ export function TeamAccessPanel({
                 hint="Add property expenses for assigned properties. Off by default."
                 checked={form.canEnterExpenses}
                 onChange={(canEnterExpenses) => setForm({ ...form, canEnterExpenses })}
+              />
+            )}
+            {form.role === "Caretaker" && (
+              <ToggleRow
+                label="Can manage the kitchen"
+                hint="Meal-order board when the Welcomely add-on is on. Off by default."
+                checked={form.canManageKitchen}
+                onChange={(canManageKitchen) => setForm({ ...form, canManageKitchen })}
               />
             )}
             {form.userId && (

@@ -9,6 +9,10 @@ export type TeamMember = {
   staffMemberId: string;
   canViewPricing: boolean;
   canEnterExpenses: boolean;
+  /** Caretaker only: may run the kitchen board (Welcomely add-on). */
+  canManageKitchen: boolean;
+  /** Organisation owner: their access cannot be changed from Team & access. */
+  isOwner: boolean;
   isActive: boolean;
   homestayIds: string[];
 };
@@ -26,6 +30,7 @@ export type TeamMemberInput = {
   homestayIds: string[];
   canViewPricing: boolean;
   canEnterExpenses: boolean;
+  canManageKitchen: boolean;
   isActive: boolean;
   staffMemberId: string;
 };
@@ -38,6 +43,8 @@ type TeamMemberRow = {
   staff_member_id: string | null;
   can_view_pricing: boolean;
   can_enter_expenses: boolean;
+  can_manage_kitchen: boolean;
+  is_owner: boolean;
   is_active: boolean;
 };
 
@@ -55,6 +62,10 @@ export function teamErrorMessage(error: { message: string; code?: string }): str
     return "The roles migration has not been applied to this Supabase project yet. Run supabase/migrations/20261118180000_roles_property_access.sql first.";
   }
 
+  if (error.code === "42703") {
+    return "The organisations migration has not been applied to this Supabase project yet. Run supabase/migrations/20261119210000_organisations.sql first.";
+  }
+
   return error.message;
 }
 
@@ -63,7 +74,7 @@ export async function fetchTeamData(): Promise<TeamData> {
   const [membersResult, assignmentsResult, allocationResult] = await Promise.all([
     db
       .from("team_members")
-      .select("user_id,role,display_name,email,staff_member_id,can_view_pricing,can_enter_expenses,is_active")
+      .select("user_id,role,display_name,email,staff_member_id,can_view_pricing,can_enter_expenses,can_manage_kitchen,is_owner,is_active")
       .order("display_name", { ascending: true }),
     db.from("team_member_homestays").select("user_id,homestay_id"),
     db.from("staff_member_homestays").select("staff_id,homestay_id"),
@@ -83,6 +94,8 @@ export async function fetchTeamData(): Promise<TeamData> {
     staffMemberId: row.staff_member_id ?? "",
     canViewPricing: row.can_view_pricing,
     canEnterExpenses: row.can_enter_expenses,
+    canManageKitchen: row.can_manage_kitchen,
+    isOwner: row.is_owner,
     isActive: row.is_active,
     homestayIds: assignments.filter((item) => item.user_id === row.user_id).map((item) => item.homestay_id),
   }));
@@ -104,6 +117,7 @@ function rpcArgs(input: TeamMemberInput) {
     new_homestay_ids: scoped ? input.homestayIds : [],
     new_can_view_pricing: input.role === "PropertyManager" && input.canViewPricing,
     new_can_enter_expenses: input.role === "Caretaker" && input.canEnterExpenses,
+    new_can_manage_kitchen: input.role === "Caretaker" && input.canManageKitchen,
   };
 }
 

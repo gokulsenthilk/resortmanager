@@ -8,20 +8,18 @@ import { Brand } from "@/components/brand";
 import {
   accessFromRpc,
   defaultRouteForAccess,
-  legacyAccessFromClaims,
+  noAccessProfile,
 } from "@/lib/authorization";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
 
-/** Picks the landing page from the database role, falling back to the JWT role. */
+/** Picks the landing page from the database role; no membership lands on the no-access screen. */
 async function landingRouteFor(user: User): Promise<string> {
-  const legacy = legacyAccessFromClaims(user.id, user.app_metadata);
-
-  if (!supabase) return defaultRouteForAccess(legacy);
+  if (!supabase) return defaultRouteForAccess(noAccessProfile(user.id));
 
   const { data, error } = await supabase.rpc("get_my_access");
 
-  return defaultRouteForAccess(error || !data ? legacy : accessFromRpc(data, legacy.ownerId, user.id));
+  return defaultRouteForAccess(error || !data ? noAccessProfile(user.id) : accessFromRpc(data, user.id));
 }
 
 export default function SignInPage() {

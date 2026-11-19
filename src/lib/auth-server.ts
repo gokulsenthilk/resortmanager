@@ -4,8 +4,7 @@ import { cache } from "react";
 import {
   accessFromRpc,
   canAccessModule,
-  isMissingFunctionError,
-  legacyAccessFromClaims,
+  noAccessProfile,
   type AccessProfile,
 } from "./authorization";
 import { createServerSupabaseClient } from "./supabase-server";
@@ -18,8 +17,9 @@ export type AuthenticatedAccess = {
 };
 
 /**
- * Loads the signed-in user's role and property scope from public.get_my_access().
- * Falls back to the JWT app_metadata role while the roles migration is not applied.
+ * Loads the signed-in user's organisation, role and property scope from public.get_my_access().
+ * Fails closed: if access cannot be loaded, or the user has no active membership, the profile
+ * has no role (the app shows the "no access" screen). JWT app_metadata is never trusted.
  * Cached per request so layouts, pages and actions share one lookup.
  */
 export const getAuthenticatedAccess = cache(
@@ -37,21 +37,18 @@ export const getAuthenticatedAccess = cache(
     }
 
     const user = data.user;
-    const legacy = legacyAccessFromClaims(user.id, user.app_metadata);
     const { data: accessData, error: accessError } = await supabase.rpc("get_my_access");
 
-    if (accessError) {
-      if (!isMissingFunctionError(accessError)) {
-        console.error("get_my_access failed; using legacy role", accessError.message);
-      }
+    if (accessError || !accessData) {
+      console.error("get_my_access failed; denying access", accessError?.message ?? "no data");
 
-      return { userId: user.id, email: user.email ?? "", access: legacy };
+      return { userId: user.id, email: user.email ?? "", access: noAccessProfile(user.id) };
     }
 
     return {
       userId: user.id,
       email: user.email ?? "",
-      access: accessFromRpc(accessData, legacy.ownerId, user.id),
+      access: accessFromRpc(accessData, user.id),
     };
   },
 );

@@ -12,7 +12,8 @@ select public.t_check('admin: read account_entries', (select count(*) from publi
 select public.t_check('admin: read staff_table', (select count(*) from public.staff_members)::text, '2');
 select public.t_check('admin: read team_directory_rpc', (select count(*) from public.get_team_directory())::text, '2');
 select public.t_check('admin: read salary_payments', (select count(*) from public.staff_salary_payments)::text, '1');
-select public.t_check('admin: read team_members', (select count(*) from public.team_members)::text, '8');
+-- 9 since the organisations migration: the owner now has an Admin membership row of their own.
+select public.t_check('admin: read team_members', (select count(*) from public.team_members)::text, '9');
 select public.t_check('admin: insert booking H1', public.t_try('insert into public.bookings (homestay_id, room_id, customer_id, check_in, check_out, total_amount, amount_paid) values (''10000000-0000-0000-0000-000000000001'',''20000000-0000-0000-0000-000000000001'',''30000000-0000-0000-0000-000000000001'',''2027-01-01'',''2027-01-02'',7000,0)'), 'ok:1');
 select public.t_check('admin: insert booking H2', public.t_try('insert into public.bookings (homestay_id, room_id, customer_id, check_in, check_out, total_amount, amount_paid) values (''10000000-0000-0000-0000-000000000002'',''20000000-0000-0000-0000-000000000002'',''30000000-0000-0000-0000-000000000001'',''2027-01-01'',''2027-01-02'',7000,0)'), 'ok:1');
 select public.t_check('admin: update booking B1 status', public.t_try('update public.bookings set status=''checked_in'' where id=''40000000-0000-0000-0000-000000000001'''), 'ok:1');
@@ -248,5 +249,6 @@ select public.t_check('other_owner: read account_entries', (select count(*) from
 select public.t_check('other_owner: read staff_table', (select count(*) from public.staff_members)::text, '0');
 select public.t_check('other_owner: read team_directory_rpc', (select count(*) from public.get_team_directory())::text, '0');
 select public.t_check('other_owner: read salary_payments', (select count(*) from public.staff_salary_payments)::text, '0');
-select public.t_check('other_owner: read team_members', (select count(*) from public.team_members)::text, '0');
+-- 1 since the organisations migration: the other owner's own Admin membership.
+select public.t_check('other_owner: read team_members', (select count(*) from public.team_members)::text, '1');
 reset role;

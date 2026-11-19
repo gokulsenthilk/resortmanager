@@ -31,22 +31,49 @@ export type Capability =
   | "financials.full"
   | "financials.limited"
   | "settings.manage"
+  | "kitchen.manage"
   | "housekeeping.view"
   | "maintenance.view";
 
+export type OrganisationSummary = {
+  id: string;
+  name: string;
+  slug: string;
+  status: "active" | "suspended";
+  /** Welcomely guest-experience add-on (entitlement only; no features yet). */
+  welcomelyEnabled: boolean;
+};
+
+/** Why a signed-in user has no role: not in any organisation, paused, or organisation suspended. */
+export type NoAccessReason = "no_membership" | "paused" | "suspended" | "unavailable";
+
 export type AccessProfile = {
   role: UserRole | null;
-  /** "database": loaded from get_my_access(). "legacy": roles migration not applied yet. */
-  source: "database" | "legacy";
+  /**
+   * "database": loaded from get_my_access(). "unavailable": access could not be loaded, so the
+   * user gets no role at all (fails closed; there is no JWT fallback any more).
+   */
+  source: "database" | "unavailable";
   /** Signed-in auth user id. */
   userId: string;
+  /** Legacy owner_id of the organisation (still written on new rows for older columns). */
   ownerId: string;
   displayName: string;
+  /** The organisation the user works in; null when they have no active membership. */
+  org: OrganisationSummary | null;
+  isMember: boolean;
+  isOwner: boolean;
+  /** Set when role is null. */
+  noAccessReason: NoAccessReason | null;
   /** True when the user sees every property of the workspace (Admin, Office Executive). */
   allProperties: boolean;
   homestayIds: string[];
   canViewPricing: boolean;
   canEnterExpenses: boolean;
+  /** Caretaker kitchen flag, or implied by role (Admin / Office Executive / Property Manager). */
+  canManageKitchen: boolean;
+  /** Accessible homestays where the Welcomely add-on is on for the organisation and the homestay. */
+  welcomelyHomestayIds: string[];
 };
 
 export const roleLabels: Record<UserRole, string> = {
@@ -89,44 +116,11 @@ const pathnameModules: Record<string, ModuleKey> = {
   "/team": "team",
 };
 
-/** Maps a JWT app_metadata.role (or team role) to a UserRole. Legacy "manager" -> Property Manager. */
-export function resolveUserRole(role: unknown): UserRole {
-  const value = typeof role === "string" ? role.trim().toLowerCase() : "";
-
-  if (value === "admin") return "Admin";
-  if (value === "office_executive" || value === "office executive") return "OfficeExecutive";
-  if (value === "caretaker") return "Caretaker";
-
-  return "PropertyManager";
-}
-
-export function resolveDataOwnerId(
-  userId: string | undefined,
-  configuredOwnerId: unknown,
-): string {
-  if (
-    typeof configuredOwnerId === "string" &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      configuredOwnerId,
-    )
-  ) {
-    return configuredOwnerId;
-  }
-
-  return userId ?? "";
-}
-
 /** Capability map. Keep in sync with public.has_capability() in the roles migration. */
 export function hasCapability(access: AccessProfile, capability: Capability): boolean {
   const role = access.role;
 
   if (!role) return false;
-
-  // Before the roles migration is applied the database still enforces the old two-role model,
-  // so non-admin users keep their previous calendar-only experience.
-  if (access.source === "legacy" && role !== "Admin") {
-    return capability === "bookings.view";
-  }
 
   const isAdmin = role === "Admin";
   const isOffice = isAdmin || role === "OfficeExecutive";
@@ -151,6 +145,8 @@ export function hasCapability(access: AccessProfile, capability: Capability): bo
       return isOffice || (isManager && access.canViewPricing);
     case "expenses.enter":
       return isOffice || isManager || (isCaretaker && access.canEnterExpenses);
+    case "kitchen.manage":
+      return isOffice || isManager || (isCaretaker && access.canManageKitchen);
     case "staff.salary":
     case "financials.full":
     case "settings.manage":
@@ -180,14 +176,11 @@ const moduleCapability: Record<ModuleKey, Capability> = {
 export function canAccessModule(access: AccessProfile, module: ModuleKey): boolean {
   if (!access.role) return false;
 
-  if (access.source === "legacy" && access.role !== "Admin") {
-    return module === "calendar";
-  }
-
   return hasCapability(access, moduleCapability[module]);
 }
 
 export function defaultRouteForAccess(access: AccessProfile): string {
+  if (!access.role) return "/unauthorized";
   if (canAccessModule(access, "overview")) return "/";
   return "/calendar";
 }
@@ -201,23 +194,30 @@ export function moduleForPathname(pathname: string): ModuleKey | undefined {
   return pathnameModules[pathname];
 }
 
-/** Access derived from JWT claims only (roles migration not applied, or RPC unavailable). */
-export function legacyAccessFromClaims(
+/**
+ * Profile for a signed-in user whose access could not be loaded (or who has no membership).
+ * Fails closed: no role, no properties. JWT app_metadata is deliberately ignored.
+ */
+export function noAccessProfile(
   userId: string | undefined,
-  appMetadata: Record<string, unknown> | undefined,
+  reason: NoAccessReason = "unavailable",
 ): AccessProfile {
-  const role = resolveUserRole(appMetadata?.role);
-
   return {
-    role,
-    source: "legacy",
+    role: null,
+    source: reason === "unavailable" ? "unavailable" : "database",
     userId: userId ?? "",
-    ownerId: resolveDataOwnerId(userId, appMetadata?.owner_id),
+    ownerId: "",
     displayName: "",
-    allProperties: true,
+    org: null,
+    isMember: false,
+    isOwner: false,
+    noAccessReason: reason,
+    allProperties: false,
     homestayIds: [],
-    canViewPricing: role === "Admin",
-    canEnterExpenses: role === "Admin",
+    canViewPricing: false,
+    canEnterExpenses: false,
+    canManageKitchen: false,
+    welcomelyHomestayIds: [],
   };
 }
 
@@ -226,31 +226,70 @@ type AccessRpcResult = {
   user_id: string | null;
   owner_id: string | null;
   display_name: string | null;
+  is_member?: boolean;
+  is_active?: boolean;
+  is_owner?: boolean;
+  org_status?: "active" | "suspended" | null;
+  org?: {
+    id: string;
+    name: string;
+    slug: string;
+    status: "active" | "suspended";
+    welcomely_enabled: boolean;
+  } | null;
   all_properties: boolean;
   homestay_ids: string[] | null;
+  welcomely_homestay_ids?: string[] | null;
   can_view_pricing: boolean;
   can_enter_expenses: boolean;
+  can_manage_kitchen?: boolean;
 };
 
-export function accessFromRpc(
-  result: AccessRpcResult,
-  fallbackOwnerId: string,
-  fallbackUserId = "",
-): AccessProfile {
+function noAccessReasonFor(result: AccessRpcResult): NoAccessReason {
+  if (!result.is_member) return "no_membership";
+  if (result.org_status === "suspended") return "suspended";
+  return "paused";
+}
+
+export function accessFromRpc(result: AccessRpcResult, fallbackUserId = ""): AccessProfile {
+  const role = result.role ? databaseRoleToUserRole[result.role] ?? null : null;
+  // Older databases (before the organisations migration) have no "org": treat as no access.
+  const org = result.org
+    ? {
+        id: result.org.id,
+        name: result.org.name,
+        slug: result.org.slug,
+        status: result.org.status,
+        welcomelyEnabled: Boolean(result.org.welcomely_enabled),
+      }
+    : null;
+
+  if (!role || !org) {
+    // A role without an organisation means the database predates the organisations migration.
+    const reason: NoAccessReason = role && !org ? "unavailable" : noAccessReasonFor(result);
+
+    return {
+      ...noAccessProfile(result.user_id ?? fallbackUserId, reason),
+      displayName: result.display_name ?? "",
+      isMember: Boolean(result.is_member),
+    };
+  }
+
   return {
-    role: result.role ? databaseRoleToUserRole[result.role] ?? null : null,
+    role,
     source: "database",
     userId: result.user_id ?? fallbackUserId,
-    ownerId: result.owner_id ?? fallbackOwnerId,
+    ownerId: result.owner_id ?? "",
     displayName: result.display_name ?? "",
+    org,
+    isMember: true,
+    isOwner: Boolean(result.is_owner),
+    noAccessReason: null,
     allProperties: Boolean(result.all_properties),
     homestayIds: result.homestay_ids ?? [],
     canViewPricing: Boolean(result.can_view_pricing),
     canEnterExpenses: Boolean(result.can_enter_expenses),
+    canManageKitchen: Boolean(result.can_manage_kitchen),
+    welcomelyHomestayIds: result.welcomely_homestay_ids ?? [],
   };
-}
-
-/** PostgREST / Postgres error codes meaning "the RPC does not exist" (migration not applied). */
-export function isMissingFunctionError(error: { code?: string } | null | undefined): boolean {
-  return error?.code === "PGRST202" || error?.code === "42883";
 }
