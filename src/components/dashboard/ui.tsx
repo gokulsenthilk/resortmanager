@@ -258,11 +258,13 @@ export function SidebarAuthCard({
   isConfigured,
   email,
   role,
+  organisationName,
   onSignOut,
 }: {
   isConfigured: boolean;
   email: string;
   role: UserRole;
+  organisationName?: string;
   onSignOut: () => void;
 }) {
   return (
@@ -276,7 +278,10 @@ export function SidebarAuthCard({
         <div className="mt-3 space-y-3">
           <div>
             <p className="truncate text-sm font-semibold text-white">{email}</p>
-            <p className="mt-1 text-xs text-slate-400">{roleLabels[role]}</p>
+            <p className="mt-1 text-xs text-slate-400">
+              {roleLabels[role]}
+              {organisationName ? ` · ${organisationName}` : ""}
+            </p>
           </div>
           <button
             type="button"

@@ -1648,6 +1648,7 @@ export function ResortDashboard({
             isConfigured={isSupabaseConfigured}
             email={sessionEmail}
             role={activeRole}
+            organisationName={access.org?.name}
             onSignOut={signOut}
           />
         </aside>
@@ -2044,6 +2045,7 @@ export function ResortDashboard({
         activeModule={activeModule}
         email={sessionEmail}
         role={activeRole}
+        organisationName={access.org?.name}
         isConfigured={isSupabaseConfigured}
         onClose={() => setIsMobileNavOpen(false)}
         onNavigate={(key) => setActiveModule(key)}

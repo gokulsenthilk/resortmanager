@@ -6,7 +6,9 @@ select t_check('backfill: legacy manager assigned all owner properties', (select
 select t_check('backfill: legacy manager pricing default off', (select can_view_pricing::text from team_members where user_id='00000000-0000-0000-0000-0000000000c1'), 'false');
 select t_check('backfill: invalid owner_id falls back to self', (select owner_id::text from team_members where user_id='00000000-0000-0000-0000-0000000000c2'), '00000000-0000-0000-0000-0000000000c2');
 select t_check('backfill: second legacy manager assigned', (select count(*)::text from team_member_homestays where user_id='00000000-0000-0000-0000-0000000000d7'), '3');
-select t_check('backfill: admins untouched', (select count(*)::text from team_members where user_id in ('00000000-0000-0000-0000-00000000000a','00000000-0000-0000-0000-0000000000b0')), '0');
+-- The roles migration left JWT admins alone; the organisations migration then gives each owner an
+-- Admin membership (is_owner) in their own organisation.
+select t_check('backfill: owners are admin members after the organisations migration', (select count(*)::text from team_members where user_id in ('00000000-0000-0000-0000-00000000000a','00000000-0000-0000-0000-0000000000b0') and role = 'admin' and is_owner), '2');
 
 -- PM without pricing: insert keeps no amounts, update cannot change amounts
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d2","role":"authenticated","app_metadata":{}}', false);
