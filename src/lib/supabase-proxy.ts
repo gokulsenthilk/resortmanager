@@ -1,11 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-import {
-  canAccessModule,
-  moduleForPathname,
-  resolveUserRole,
-} from "./authorization";
+import { moduleForPathname } from "./authorization";
 
 export async function updateSupabaseSession(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -46,16 +42,8 @@ export async function updateSupabaseSession(request: NextRequest) {
     return NextResponse.redirect(signInUrl);
   }
 
-  if (isAuthenticated && requestedModule) {
-    const role = resolveUserRole(data?.claims?.app_metadata?.role);
-
-    if (!canAccessModule(role, requestedModule)) {
-      const unauthorizedUrl = request.nextUrl.clone();
-      unauthorizedUrl.pathname = "/unauthorized";
-      unauthorizedUrl.search = "";
-      return NextResponse.redirect(unauthorizedUrl);
-    }
-  }
+  // Role and property checks need the database (public.get_my_access), so they run in
+  // requireModuleAccess() on the page and in RLS, not in the proxy.
 
   return response;
 }

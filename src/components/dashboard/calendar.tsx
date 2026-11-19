@@ -21,12 +21,14 @@ export function BookingsCalendarView({
   homestays,
   month,
   onMonthChange,
+  showPricing = true,
 }: {
   bookings: Booking[];
   customers: DashboardData["customers"];
   homestays: Homestay[];
   month: string;
   onMonthChange: (month: string) => void;
+  showPricing?: boolean;
 }) {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [mobileDay, setMobileDay] = useState("");
@@ -242,6 +244,7 @@ export function BookingsCalendarView({
                 )}
                 onClick={() => setSelectedBooking(booking)}
                 roomy
+                showPricing={showPricing}
               />
             ))}
           </div>
@@ -274,12 +277,14 @@ export function CalendarBookingChip({
   homestay,
   onClick,
   roomy = false,
+  showPricing = true,
 }: {
   booking: Booking;
   customer?: DashboardData["customers"][number];
   homestay?: Homestay;
   onClick: () => void;
   roomy?: boolean;
+  showPricing?: boolean;
 }) {
   return (
     <button
@@ -301,8 +306,8 @@ export function CalendarBookingChip({
       </p>
       {roomy && (
         <p className="mt-1 text-xs opacity-80">
-          {formatDate(booking.checkIn)} to {formatDate(booking.checkOut)} -{" "}
-          {inr.format(booking.amount)}
+          {formatDate(booking.checkIn)} to {formatDate(booking.checkOut)}
+          {showPricing && <> - {inr.format(booking.amount)}</>}
         </p>
       )}
     </button>

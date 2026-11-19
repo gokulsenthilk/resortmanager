@@ -40,7 +40,13 @@ export function StaffPanel({
   onSalaryMonthChange,
   onMarkPaid,
   onMarkUnpaid,
+  mode = "full",
 }: {
+  /**
+   * full: records + payroll (Admin). records: staff records without payroll (Office Executive).
+   * directory: read-only contact list of the assigned team (Property Manager).
+   */
+  mode?: "full" | "records" | "directory";
   form: StaffForm;
   staffMembers: StaffMember[];
   salaryPayments: DashboardData["staffSalaryPayments"];
@@ -100,9 +106,12 @@ export function StaffPanel({
   const typeOptions = Array.from(
     new Set([...employeeTypes, ...staffMembers.map((staff) => staff.employeeType)]),
   ).filter(Boolean);
+  const showPayroll = mode === "full";
+  const canManage = mode !== "directory";
 
   return (
-    <section className="grid min-w-0 gap-5 2xl:grid-cols-[420px_minmax(0,1fr)]">
+    <section className={`grid min-w-0 gap-5 ${canManage ? "2xl:grid-cols-[420px_minmax(0,1fr)]" : ""}`}>
+      {canManage && (
       <MobileCollapsible
         label="Add staff member"
         icon={<UserPlus className="h-5 w-5" aria-hidden="true" />}
@@ -116,6 +125,7 @@ export function StaffPanel({
           onSubmit={onSubmit}
         />
       </MobileCollapsible>
+      )}
 
       <div className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-4 border-b border-slate-200 p-4 xl:flex-row xl:items-end xl:justify-between">
@@ -124,7 +134,11 @@ export function StaffPanel({
               Staff
             </h2>
             <p className="mt-1 text-sm text-slate-500">
-              Team details and salary status for the selected month.
+              {mode === "directory"
+                ? "Staff allocated to your properties."
+                : showPayroll
+                  ? "Team details and salary status for the selected month."
+                  : "Team details and contact information."}
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,220px)_180px_180px]">
@@ -154,6 +168,7 @@ export function StaffPanel({
                 options={[{ value: "all", label: "All types" }, ...toOptions(typeOptions)]}
               />
             </Field>
+            {showPayroll && (
             <Field label="Salary month">
               <input
                 type="month"
@@ -162,16 +177,23 @@ export function StaffPanel({
                 className="field-control"
               />
             </Field>
+            )}
           </div>
         </div>
 
         <div className="grid grid-cols-3 gap-2 border-b border-slate-100 p-4 md:gap-3">
           <Stat label="Active staff" value={String(activeStaffCount)} />
-          <Stat
-            label={`${formatMonthLabel(salaryMonth)} paid`}
-            value={`${paidCount}/${staffMembers.length}`}
-          />
-          <Stat label="Salary due" value={inr.format(salaryDue)} />
+          {showPayroll ? (
+            <>
+              <Stat
+                label={`${formatMonthLabel(salaryMonth)} paid`}
+                value={`${paidCount}/${staffMembers.length}`}
+              />
+              <Stat label="Salary due" value={inr.format(salaryDue)} />
+            </>
+          ) : (
+            <Stat label="Total staff" value={String(staffMembers.length)} />
+          )}
         </div>
 
         {salaryError && (
@@ -223,12 +245,26 @@ export function StaffPanel({
                     {staff.employeeType} - {staff.mobileNumber || "No mobile"}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
-                    {staff.email || "No email"} - Joined {staff.dateOfJoining ? formatDate(staff.dateOfJoining) : "Not recorded"}
+                    {staff.email || "No email"}
+                    {canManage && <> - Joined {staff.dateOfJoining ? formatDate(staff.dateOfJoining) : "Not recorded"}</>}
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Emergency: {staff.emergencyContact || "Not recorded"}
-                  </p>
+                  {canManage ? (
+                    <p className="mt-1 text-xs text-slate-500">
+                      Emergency: {staff.emergencyContact || "Not recorded"}
+                    </p>
+                  ) : (
+                    staff.mobileNumber && (
+                      <a
+                        href={`tel:${staff.mobileNumber.replace(/[^\d+]/g, "")}`}
+                        className="mt-2 inline-flex h-11 items-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-teal-800 lg:h-9"
+                      >
+                        Call {staff.name.split(" ")[0]}
+                      </a>
+                    )
+                  )}
                 </div>
+                {canManage && (
+                <>
 
                 <div className="grid grid-cols-2 gap-x-3 gap-y-1 rounded-md bg-slate-50 p-3 text-sm text-slate-600 sm:grid-cols-1 sm:bg-transparent sm:p-0">
                   <p>Aadhar: {staff.aadharNumber || "Not recorded"}</p>
@@ -246,6 +282,7 @@ export function StaffPanel({
                   <p className="text-sm font-semibold text-slate-950">
                     {inr.format(payment?.amount ?? staff.monthlySalary)}
                   </p>
+                  {showPayroll && (
                   <span
                     className={`mt-2 inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${
                       isPaid
@@ -255,7 +292,8 @@ export function StaffPanel({
                   >
                     {isPaid ? "Paid" : "Unpaid"}
                   </span>
-                  {payment && (
+                  )}
+                  {showPayroll && payment && (
                     <div className="mt-1 space-y-0.5 text-xs text-slate-500">
                       <p>Paid on {formatDate(payment.paidOn)}</p>
                       <p>
@@ -282,7 +320,7 @@ export function StaffPanel({
                     <Pencil className="h-4 w-4" />
                     Edit
                   </button>
-                  {isPaid ? (
+                  {!showPayroll ? null : isPaid ? (
                     <>
                       <button
                         type="button"
@@ -312,6 +350,8 @@ export function StaffPanel({
                     </button>
                   )}
                 </div>
+                </>
+                )}
               </article>
             );
           })}

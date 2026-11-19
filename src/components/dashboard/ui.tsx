@@ -8,7 +8,7 @@ import {
   X,
 } from "lucide-react";
 import { ReactNode, useEffect, useRef, useState } from "react";
-import type { UserRole } from "@/lib/authorization";
+import { roleLabels, type UserRole } from "@/lib/authorization";
 
 import {
   formatDateRangeLabel,
@@ -276,7 +276,7 @@ export function SidebarAuthCard({
         <div className="mt-3 space-y-3">
           <div>
             <p className="truncate text-sm font-semibold text-white">{email}</p>
-            <p className="mt-1 text-xs text-slate-400">{role}</p>
+            <p className="mt-1 text-xs text-slate-400">{roleLabels[role]}</p>
           </div>
           <button
             type="button"

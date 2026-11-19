@@ -8,8 +8,14 @@ export async function AuthorizedDashboardPage({
 }: {
   module: ModuleKey;
 }) {
-  await requireModuleAccess(module);
+  const { access } = await requireModuleAccess(module);
 
-  return <ResortDashboard key={module} initialModule={module} />;
+  return (
+    <ResortDashboard
+      key={module}
+      initialModule={module}
+      access={access}
+      canInviteUsers={Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY)}
+    />
+  );
 }
-

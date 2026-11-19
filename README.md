@@ -23,7 +23,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 To connect Supabase:
 
 1. Create a Supabase project.
-2. Run `supabase/schema.sql` in the Supabase SQL editor.
+2. Run `supabase/schema.sql` in the Supabase SQL editor (existing projects: run the files in `supabase/migrations/` instead).
 3. Copy `.env.example` to `.env.local`.
 4. Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 5. Restart `npm run dev`.
@@ -35,6 +35,7 @@ The app reads homestays, rooms, customers, bookings, and account entries from Su
 The schema uses:
 
 - Owner-scoped row level security policies.
+- Four roles (Admin, Office Executive, Property Manager, Caretaker) with property-wise access. See [docs/roles-and-access.md](docs/roles-and-access.md).
 - Indexed foreign keys for joins and cascade operations.
 - Composite booking date index for property calendars.
 - Numeric money columns for exact account totals.

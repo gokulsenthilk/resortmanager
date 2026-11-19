@@ -1,3 +1,4 @@
+import { hasCapability, type AccessProfile } from "./authorization";
 import { supabase } from "./supabase";
 import type {
   AccountEntry,
@@ -25,6 +26,8 @@ type HomestayRow = {
 
 type CustomerRow = {
   id: string;
+  /** Only selected once the roles migration is applied. */
+  created_by?: string | null;
   full_name: string;
   phone: string;
   email: string | null;
@@ -224,9 +227,61 @@ export type CommonExpenseHistoryResult = {
   totalCount: number;
 };
 
-export async function fetchDashboardData(): Promise<DashboardData> {
+type BookingScheduleRow = Omit<BookingRow, "total_amount" | "amount_paid"> & {
+  guest_name: string;
+  guest_phone: string;
+};
+
+type TeamDirectoryRow = {
+  id: string;
+  full_name: string;
+  mobile_number: string;
+  email: string | null;
+  employee_type: string;
+  is_active: boolean;
+};
+
+/**
+ * Loads what the signed-in user may see. Roles without booking pricing read bookings through
+ * public.get_booking_schedule() (no amounts); Property Managers read their team through
+ * public.get_team_directory() (no salary or ID numbers). RLS scopes everything to the user's
+ * properties, so the queries are the same for every role.
+ */
+function customerColumns(access?: AccessProfile) {
+  return access?.source === "database"
+    ? "id,full_name,phone,email,city,preferences,created_by"
+    : "id,full_name,phone,email,city,preferences";
+}
+
+/**
+ * Property Managers read every guest of the workspace (guest search) but may only edit guests
+ * they created or guests booked at their properties; the customers UPDATE policy enforces the
+ * same rule, this only hides the Edit button.
+ */
+function withEditScope(
+  customer: Customer,
+  row: CustomerRow,
+  visibleBookings: BookingRow[],
+  access?: AccessProfile,
+): Customer {
+  if (!access || access.allProperties || !hasCapability(access, "guests.manage")) {
+    return { ...customer, canEdit: access ? hasCapability(access, "guests.manage") : true };
+  }
+
+  const canEdit =
+    (Boolean(row.created_by) && row.created_by === access.userId) ||
+    visibleBookings.some((booking) => booking.customer_id === row.id);
+
+  return { ...customer, canEdit };
+}
+
+export async function fetchDashboardData(access?: AccessProfile): Promise<DashboardData> {
   if (!supabase) {
     throw new Error("Supabase environment variables are not configured.");
+  }
+
+  if (access && access.source === "database" && !hasCapability(access, "bookings.pricing")) {
+    return fetchScheduleDashboardData(access);
   }
 
   const [
@@ -244,7 +299,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
       .order("name", { ascending: true }),
     supabase
       .from("customers")
-      .select("id,full_name,phone,email,city,preferences")
+      .select(customerColumns(access))
       .order("full_name", { ascending: true }),
     supabase
       .from("rooms")
@@ -284,7 +339,9 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   const rooms = ((roomsResult.data ?? []) as RoomRow[]).map(mapRoom);
   const rawBookings = (bookingsResult.data ?? []) as BookingRow[];
   const bookings = rawBookings.map((row) => mapBooking(row, rooms));
-  const customers = ((customersResult.data ?? []) as CustomerRow[]).map((row) => mapCustomer(row, rawBookings));
+  const customers = ((customersResult.data ?? []) as unknown as CustomerRow[]).map((row) =>
+    withEditScope(mapCustomer(row, rawBookings), row, rawBookings, access),
+  );
   const accountEntries = ((accountsResult.data ?? []) as AccountEntryRow[]).map(mapAccountEntry);
   const staffMembers = staffResult.error
     ? []
@@ -302,6 +359,161 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     bookings,
     accountEntries,
   };
+}
+
+async function fetchScheduleDashboardData(access: AccessProfile): Promise<DashboardData> {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  const canSeeGuests = hasCapability(access, "guests.view");
+  const canSeeTeam = hasCapability(access, "staff.view_team");
+  const canSeeExpenses = hasCapability(access, "expenses.enter");
+  const [homestaysResult, roomsResult, scheduleResult, customersResult, accountsResult, teamResult] =
+    await Promise.all([
+      supabase
+        .from("homestays")
+        .select("id,name,location,manager_name,units,nightly_rate,status")
+        .order("name", { ascending: true }),
+      supabase
+        .from("rooms")
+        .select("id,homestay_id,name,capacity,nightly_rate,is_active")
+        .eq("is_active", true)
+        .order("name", { ascending: true }),
+      supabase.rpc("get_booking_schedule"),
+      canSeeGuests
+        ? supabase
+            .from("customers")
+            .select(customerColumns(access))
+            .order("full_name", { ascending: true })
+        : Promise.resolve({ data: [] as CustomerRow[], error: null }),
+      canSeeExpenses
+        ? supabase
+            .from("account_entries")
+            .select("id,homestay_id,booking_id,label,entry_type,category,entry_date,amount,is_cleared")
+            .order("entry_date", { ascending: false })
+        : Promise.resolve({ data: [] as AccountEntryRow[], error: null }),
+      canSeeTeam
+        ? supabase.rpc("get_team_directory")
+        : Promise.resolve({ data: [] as TeamDirectoryRow[], error: null }),
+    ]);
+
+  const firstError =
+    homestaysResult.error ?? roomsResult.error ?? scheduleResult.error ?? customersResult.error ?? accountsResult.error;
+
+  if (firstError) {
+    throw new Error(firstError.message);
+  }
+
+  const homestays = ((homestaysResult.data ?? []) as HomestayRow[]).map(mapHomestay);
+  const rooms = ((roomsResult.data ?? []) as RoomRow[]).map(mapRoom);
+  const schedule = (scheduleResult.data ?? []) as BookingScheduleRow[];
+  const rawBookings: BookingRow[] = schedule.map((row) => ({
+    id: row.id,
+    homestay_id: row.homestay_id,
+    room_id: row.room_id,
+    customer_id: row.customer_id,
+    check_in: row.check_in,
+    check_out: row.check_out,
+    guest_count: row.guest_count,
+    status: row.status,
+    channel: row.channel,
+    total_amount: 0,
+    amount_paid: 0,
+  }));
+  const bookings = rawBookings.map((row) => mapBooking(row, rooms));
+  let customerRows = (customersResult.data ?? []) as unknown as CustomerRow[];
+
+  if (!canSeeGuests) {
+    // Caretakers: name and phone of guests staying at their properties only.
+    const seen = new Map<string, CustomerRow>();
+    schedule.forEach((row) => {
+      if (!seen.has(row.customer_id)) {
+        seen.set(row.customer_id, {
+          id: row.customer_id,
+          full_name: row.guest_name,
+          phone: row.guest_phone,
+          email: null,
+          city: null,
+          preferences: null,
+        });
+      }
+    });
+    customerRows = Array.from(seen.values());
+  }
+
+  const customers = customerRows.map((row) =>
+    withEditScope(mapCustomer(row, rawBookings), row, rawBookings, access),
+  );
+  const accountEntries = ((accountsResult.data ?? []) as AccountEntryRow[]).map(mapAccountEntry);
+  const staffMembers = teamResult.error
+    ? []
+    : ((teamResult.data ?? []) as TeamDirectoryRow[]).map((row) =>
+        mapStaffMember({
+          id: row.id,
+          full_name: row.full_name,
+          mobile_number: row.mobile_number,
+          email: row.email,
+          date_of_joining: null,
+          aadhar_number: null,
+          pan_number: null,
+          emergency_contact: null,
+          monthly_salary: 0,
+          monthly_incentive: 0,
+          employee_type: row.employee_type,
+          is_active: row.is_active,
+        }),
+      );
+
+  return {
+    homestays,
+    rooms,
+    customers,
+    staffMembers,
+    staffSalaryPayments: [],
+    bookings,
+    accountEntries,
+  };
+}
+
+export type SaveBookingDetailsInput = {
+  id: string | null;
+  homestayId: string;
+  roomId: string | null;
+  customerId: string;
+  checkIn: string;
+  checkOut: string;
+  guests: number;
+  status: BookingStatus;
+  channel: string;
+};
+
+/**
+ * Creates or edits a booking without amounts (public.save_booking_details). Used by roles that
+ * cannot read booking pricing, because they cannot SELECT the bookings table directly.
+ */
+export async function saveBookingDetails(input: SaveBookingDetailsInput): Promise<string> {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  const { data, error } = await supabase.rpc("save_booking_details", {
+    booking_id: input.id,
+    target_homestay_id: input.homestayId,
+    target_room_id: input.roomId,
+    target_customer_id: input.customerId,
+    new_check_in: input.checkIn,
+    new_check_out: input.checkOut,
+    new_guest_count: input.guests,
+    new_status: input.status,
+    new_channel: input.channel,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as string;
 }
 
 export async function fetchCommonExpenseHistory({
@@ -597,6 +809,12 @@ export async function updateCustomer(input: UpdateCustomerInput): Promise<Custom
     .eq("id", input.id)
     .select("id,full_name,phone,email,city,preferences")
     .single();
+
+  if (error?.code === "PGRST116") {
+    // RLS matched no row: Property Managers can read every guest but only edit guests
+    // booked at their properties or created by them.
+    throw new Error("This guest is read-only for you: they have no booking at your properties.");
+  }
 
   if (error) {
     throw new Error(error.message);
