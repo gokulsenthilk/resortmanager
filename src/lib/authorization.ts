@@ -38,6 +38,8 @@ export type AccessProfile = {
   role: UserRole | null;
   /** "database": loaded from get_my_access(). "legacy": roles migration not applied yet. */
   source: "database" | "legacy";
+  /** Signed-in auth user id. */
+  userId: string;
   ownerId: string;
   displayName: string;
   /** True when the user sees every property of the workspace (Admin, Office Executive). */
@@ -209,6 +211,7 @@ export function legacyAccessFromClaims(
   return {
     role,
     source: "legacy",
+    userId: userId ?? "",
     ownerId: resolveDataOwnerId(userId, appMetadata?.owner_id),
     displayName: "",
     allProperties: true,
@@ -220,6 +223,7 @@ export function legacyAccessFromClaims(
 
 type AccessRpcResult = {
   role: DatabaseRole | null;
+  user_id: string | null;
   owner_id: string | null;
   display_name: string | null;
   all_properties: boolean;
@@ -228,10 +232,15 @@ type AccessRpcResult = {
   can_enter_expenses: boolean;
 };
 
-export function accessFromRpc(result: AccessRpcResult, fallbackOwnerId: string): AccessProfile {
+export function accessFromRpc(
+  result: AccessRpcResult,
+  fallbackOwnerId: string,
+  fallbackUserId = "",
+): AccessProfile {
   return {
     role: result.role ? databaseRoleToUserRole[result.role] ?? null : null,
     source: "database",
+    userId: result.user_id ?? fallbackUserId,
     ownerId: result.owner_id ?? fallbackOwnerId,
     displayName: result.display_name ?? "",
     allProperties: Boolean(result.all_properties),

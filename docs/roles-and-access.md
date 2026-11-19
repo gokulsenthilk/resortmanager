@@ -11,7 +11,7 @@ Manager's phone only ever receives rows for their properties.
 | --- | --- | --- | --- | --- |
 | Properties | All, edit | All, edit | Assigned, view | Assigned, view |
 | Bookings | All, create/edit/delete | All, create/edit/delete | Assigned, create/edit | Assigned, view only |
-| Guest information | All | All | Guests of assigned properties + guests they added | Name and phone of guests staying at assigned properties |
+| Guest information | All | All | Read/search all guests (contact details only); edit guests booked at assigned properties + guests they added | Name and phone of guests staying at assigned properties |
 | Booking pricing (amounts, payments, extras) | Yes | Yes | Only if "Can see booking pricing" is on (off by default) | No |
 | Revenue (overview totals, Accounts) | Yes | Yes | No | No |
 | Expense entry | Yes | Yes | Yes (assigned properties) | Only if "Can record expenses" is on (off by default) |
@@ -26,7 +26,10 @@ open the Calendar.
 
 | Rule | Database (RLS / RPC) | UI |
 | --- | --- | --- |
-| Property scope for every table (homestays, rooms, bookings, customers, account_entries, staff allocation) | Yes | Property switcher only lists assigned properties |
+| Property scope for every table (homestays, rooms, bookings, account_entries, staff allocation; customers for edits) | Yes | Property switcher only lists assigned properties |
+| Guest search: Property Managers read all of the workspace's guests (name, phone, email, city, preferences) | Yes (`customers` SELECT needs `guests.view` and at least one assigned property; other workspaces stay hidden) | Quick-booking guest search and Customers list show every guest |
+| Guest money fields (lifetime / stay value) hidden without pricing | Yes, by design: `customers` has no money columns; stay value is computed from booking amounts, which those users cannot read (`bookings` SELECT needs pricing, `get_booking_schedule()` has no amounts) | Lifetime value shows "—" |
+| Guests outside a Property Manager's properties are read-only | Yes (`customers` UPDATE still needs `created_by = auth.uid()` or a booking at an assigned property; delete is Admin/Office Executive only) | Edit button replaced by "View only" |
 | Booking amounts hidden from roles without pricing | Yes. The `bookings` table is not readable without pricing; those users read `get_booking_schedule()`, which has no amount columns. A trigger stops them setting or changing amounts. | Amount fields, dues, extras and lifetime value are not rendered |
 | Booking-linked income/expense lines | Yes (need pricing) | Hidden |
 | Revenue / income entries, Accounts | Yes (`revenue.view`) | Module hidden, overview shows counts only |
@@ -46,6 +49,19 @@ Housekeeping and Maintenance are future modules. The migration already defines
 `homestay_id in (select private.accessible_homestay_ids())` in their policies to get the same
 property scope.
 
+Note for Property Managers who can see pricing: a guest's stays and lifetime value only count
+bookings at their assigned properties, because bookings at other properties stay hidden.
+
+## Resolved decisions
+
+* **Guest search (resolved: yes).** Property Managers can search every guest of the workspace when
+  creating a booking, so a returning guest is not duplicated. They still only see bookings of their
+  assigned properties. Guests without a booking at their properties (and not added by them) are
+  read-only for them; booking such a guest at one of their properties makes the guest editable.
+  Caretakers are unchanged: name and phone only, for guests staying at their properties.
+* **Office Executive (resolved: confirmed).** Office Executives manage staff records but not
+  payroll (salary payments stay Admin only). No code change was needed.
+
 ## Existing users
 
 * `app_metadata.role = "admin"` users need nothing: without a `team_members` row the JWT role is
@@ -55,8 +71,8 @@ property scope.
   property of that owner**. That is the same data RLS let them read before, so nothing disappears.
   Booking pricing starts **off** (spec default). Narrow their properties or turn pricing on in
   Team & access.
-* A Manager created later without a `team_members` row gets **no properties** until an Admin
-  assigns some (deny by default).
+* A Manager created later without a `team_members` row gets **no properties** (and no guests)
+  until an Admin assigns some (deny by default).
 * Until the migration is applied, the app falls back to the old behaviour (Admin: everything,
   everyone else: calendar only), so deploying the code first is safe.
 
@@ -91,7 +107,7 @@ nothing), or delete the user in Supabase Auth.
 ## Tests
 
 `supabase/tests/rbac/run.sh` applies the old schema, seeds fake rows, runs the migration twice and
-checks 266 role × table × operation expectations, plus a fresh install from `schema.sql`. Run it
+checks 281 role × table × operation expectations, plus a fresh install from `schema.sql`. Run it
 only against a throwaway local Postgres:
 
 ```bash

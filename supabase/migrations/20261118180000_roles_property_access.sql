@@ -240,7 +240,7 @@ as $$
     and public.current_app_role() is not null;
 $$;
 
--- Guests with a booking at a property the user can access (Property Manager guest scope).
+-- Guests with a booking at a property the user can access (Property Manager edit scope).
 create or replace function private.booked_customer_ids()
 returns setof uuid
 language sql
@@ -413,17 +413,24 @@ create policy "rbac rooms delete" on public.rooms
 for delete to authenticated
 using (homestay_id in (select private.accessible_homestay_ids()) and (select public.has_capability('properties.manage')));
 
--- Customers ("Guest information": all / all / assigned / limited). Caretakers never read this
--- table; they get name + phone through public.get_booking_schedule().
+-- Customers ("Guest information": all / all / assigned / limited).
+-- * Read: Admin, Office Executive and Property Manager (with at least one assigned property) read
+--   every guest of the workspace, so a Property Manager can find a returning guest instead of
+--   creating a duplicate. The table only
+--   holds contact details; stay value is derived from booking amounts, which stay protected by
+--   the bookings policies / get_booking_schedule().
+-- * Edit: Property Managers may only edit guests they created or guests booked at one of their
+--   properties; other guests are read-only for them.
+-- * Caretakers never read this table; they get name + phone through get_booking_schedule().
 create policy "rbac customers select" on public.customers
 for select to authenticated
 using (
   owner_id = (select public.current_data_owner_id())
   and (select public.has_capability('guests.view'))
+  -- deny by default: a Property Manager with no assigned property sees no guests
   and (
     (select public.has_capability('properties.all'))
-    or created_by = (select auth.uid())
-    or id in (select private.booked_customer_ids())
+    or exists (select 1 from private.assigned_homestay_ids())
   )
 );
 
@@ -718,6 +725,7 @@ begin
 
   return jsonb_build_object(
     'role', r,
+    'user_id', auth.uid(),
     'is_member', member.user_id is not null,
     'is_active', coalesce(member.is_active, r is not null),
     'display_name', member.display_name,

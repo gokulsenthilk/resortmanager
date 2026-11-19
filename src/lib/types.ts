@@ -42,6 +42,11 @@ export type Customer = {
   lifetimeValue: number;
   lastStay: string;
   preference: string;
+  /**
+   * False when the signed-in Property Manager may read but not edit this guest (no booking at
+   * their properties and not created by them). Mirrors the customers UPDATE policy.
+   */
+  canEdit?: boolean;
 };
 
 export type BookingStatus = "confirmed" | "pending" | "checked_in" | "checked_out" | "cancelled";

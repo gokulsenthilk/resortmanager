@@ -26,6 +26,8 @@ type HomestayRow = {
 
 type CustomerRow = {
   id: string;
+  /** Only selected once the roles migration is applied. */
+  created_by?: string | null;
   full_name: string;
   phone: string;
   email: string | null;
@@ -245,6 +247,34 @@ type TeamDirectoryRow = {
  * public.get_team_directory() (no salary or ID numbers). RLS scopes everything to the user's
  * properties, so the queries are the same for every role.
  */
+function customerColumns(access?: AccessProfile) {
+  return access?.source === "database"
+    ? "id,full_name,phone,email,city,preferences,created_by"
+    : "id,full_name,phone,email,city,preferences";
+}
+
+/**
+ * Property Managers read every guest of the workspace (guest search) but may only edit guests
+ * they created or guests booked at their properties; the customers UPDATE policy enforces the
+ * same rule, this only hides the Edit button.
+ */
+function withEditScope(
+  customer: Customer,
+  row: CustomerRow,
+  visibleBookings: BookingRow[],
+  access?: AccessProfile,
+): Customer {
+  if (!access || access.allProperties || !hasCapability(access, "guests.manage")) {
+    return { ...customer, canEdit: access ? hasCapability(access, "guests.manage") : true };
+  }
+
+  const canEdit =
+    (Boolean(row.created_by) && row.created_by === access.userId) ||
+    visibleBookings.some((booking) => booking.customer_id === row.id);
+
+  return { ...customer, canEdit };
+}
+
 export async function fetchDashboardData(access?: AccessProfile): Promise<DashboardData> {
   if (!supabase) {
     throw new Error("Supabase environment variables are not configured.");
@@ -269,7 +299,7 @@ export async function fetchDashboardData(access?: AccessProfile): Promise<Dashbo
       .order("name", { ascending: true }),
     supabase
       .from("customers")
-      .select("id,full_name,phone,email,city,preferences")
+      .select(customerColumns(access))
       .order("full_name", { ascending: true }),
     supabase
       .from("rooms")
@@ -309,7 +339,9 @@ export async function fetchDashboardData(access?: AccessProfile): Promise<Dashbo
   const rooms = ((roomsResult.data ?? []) as RoomRow[]).map(mapRoom);
   const rawBookings = (bookingsResult.data ?? []) as BookingRow[];
   const bookings = rawBookings.map((row) => mapBooking(row, rooms));
-  const customers = ((customersResult.data ?? []) as CustomerRow[]).map((row) => mapCustomer(row, rawBookings));
+  const customers = ((customersResult.data ?? []) as unknown as CustomerRow[]).map((row) =>
+    withEditScope(mapCustomer(row, rawBookings), row, rawBookings, access),
+  );
   const accountEntries = ((accountsResult.data ?? []) as AccountEntryRow[]).map(mapAccountEntry);
   const staffMembers = staffResult.error
     ? []
@@ -352,7 +384,7 @@ async function fetchScheduleDashboardData(access: AccessProfile): Promise<Dashbo
       canSeeGuests
         ? supabase
             .from("customers")
-            .select("id,full_name,phone,email,city,preferences")
+            .select(customerColumns(access))
             .order("full_name", { ascending: true })
         : Promise.resolve({ data: [] as CustomerRow[], error: null }),
       canSeeExpenses
@@ -390,7 +422,7 @@ async function fetchScheduleDashboardData(access: AccessProfile): Promise<Dashbo
     amount_paid: 0,
   }));
   const bookings = rawBookings.map((row) => mapBooking(row, rooms));
-  let customerRows = (customersResult.data ?? []) as CustomerRow[];
+  let customerRows = (customersResult.data ?? []) as unknown as CustomerRow[];
 
   if (!canSeeGuests) {
     // Caretakers: name and phone of guests staying at their properties only.
@@ -410,7 +442,9 @@ async function fetchScheduleDashboardData(access: AccessProfile): Promise<Dashbo
     customerRows = Array.from(seen.values());
   }
 
-  const customers = customerRows.map((row) => mapCustomer(row, rawBookings));
+  const customers = customerRows.map((row) =>
+    withEditScope(mapCustomer(row, rawBookings), row, rawBookings, access),
+  );
   const accountEntries = ((accountsResult.data ?? []) as AccountEntryRow[]).map(mapAccountEntry);
   const staffMembers = teamResult.error
     ? []
@@ -775,6 +809,12 @@ export async function updateCustomer(input: UpdateCustomerInput): Promise<Custom
     .eq("id", input.id)
     .select("id,full_name,phone,email,city,preferences")
     .single();
+
+  if (error?.code === "PGRST116") {
+    // RLS matched no row: Property Managers can read every guest but only edit guests
+    // booked at their properties or created by them.
+    throw new Error("This guest is read-only for you: they have no booking at your properties.");
+  }
 
   if (error) {
     throw new Error(error.message);

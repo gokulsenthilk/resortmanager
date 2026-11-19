@@ -21,7 +21,7 @@ async function landingRouteFor(user: User): Promise<string> {
 
   const { data, error } = await supabase.rpc("get_my_access");
 
-  return defaultRouteForAccess(error || !data ? legacy : accessFromRpc(data, legacy.ownerId));
+  return defaultRouteForAccess(error || !data ? legacy : accessFromRpc(data, legacy.ownerId, user.id));
 }
 
 export default function SignInPage() {

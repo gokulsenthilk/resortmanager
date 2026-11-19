@@ -78,7 +78,7 @@ select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000
 set role authenticated;
 select public.t_check('pm: read homestays', (select count(*) from public.homestays)::text, '1');
 select public.t_check('pm: read rooms', (select count(*) from public.rooms)::text, '1');
-select public.t_check('pm: read customers', (select count(*) from public.customers)::text, '1');
+select public.t_check('pm: read customers', (select count(*) from public.customers)::text, '3');
 select public.t_check('pm: read bookings_table', (select count(*) from public.bookings)::text, '0');
 select public.t_check('pm: read booking_schedule_rpc', (select count(*) from public.get_booking_schedule())::text, '1');
 select public.t_check('pm: read account_entries', (select count(*) from public.account_entries)::text, '1');
@@ -108,7 +108,7 @@ select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000
 set role authenticated;
 select public.t_check('pm_pricing: read homestays', (select count(*) from public.homestays)::text, '1');
 select public.t_check('pm_pricing: read rooms', (select count(*) from public.rooms)::text, '1');
-select public.t_check('pm_pricing: read customers', (select count(*) from public.customers)::text, '1');
+select public.t_check('pm_pricing: read customers', (select count(*) from public.customers)::text, '3');
 select public.t_check('pm_pricing: read bookings_table', (select count(*) from public.bookings)::text, '1');
 select public.t_check('pm_pricing: read booking_schedule_rpc', (select count(*) from public.get_booking_schedule())::text, '1');
 select public.t_check('pm_pricing: read account_entries', (select count(*) from public.account_entries)::text, '1');

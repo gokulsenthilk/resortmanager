@@ -51,7 +51,7 @@ export const getAuthenticatedAccess = cache(
     return {
       userId: user.id,
       email: user.email ?? "",
-      access: accessFromRpc(accessData, legacy.ownerId),
+      access: accessFromRpc(accessData, legacy.ownerId, user.id),
     };
   },
 );

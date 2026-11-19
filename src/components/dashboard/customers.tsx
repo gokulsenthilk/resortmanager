@@ -484,14 +484,23 @@ export function CustomerTable({
                   <p className="mt-1 text-sm text-slate-500">No phone</p>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={() => onEditCustomer(customer)}
-                className="grid h-11 w-11 shrink-0 place-items-center rounded-md border lg:h-9 lg:w-9 border-slate-200 text-slate-700 transition hover:border-slate-300"
-                aria-label={`Edit ${customer.name}`}
-              >
-                <Pencil className="h-4 w-4" />
-              </button>
+              {customer.canEdit === false ? (
+                <span
+                  className="shrink-0 rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500"
+                  title="This guest has no booking at your properties, so it is read-only for you."
+                >
+                  View only
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onEditCustomer(customer)}
+                  className="grid h-11 w-11 shrink-0 place-items-center rounded-md border lg:h-9 lg:w-9 border-slate-200 text-slate-700 transition hover:border-slate-300"
+                  aria-label={`Edit ${customer.name}`}
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+              )}
             </div>
             <div className="grid gap-2 text-sm text-slate-500">
               <p>{customer.email || "No email"}</p>
@@ -563,14 +572,23 @@ export function CustomerTable({
                   {showPricing ? inr.format(customer.lifetimeValue) : "—"}
                 </td>
                 <td className="px-4 py-4 text-right">
-                  <button
-                    type="button"
-                    onClick={() => onEditCustomer(customer)}
-                    className="inline-flex h-11 lg:h-9 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
-                  >
-                    <Pencil className="h-4 w-4" />
-                    Edit
-                  </button>
+                  {customer.canEdit === false ? (
+                    <span
+                      className="text-xs font-medium text-slate-500"
+                      title="This guest has no booking at your properties, so it is read-only for you."
+                    >
+                      View only
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onEditCustomer(customer)}
+                      className="inline-flex h-11 lg:h-9 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Edit
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
